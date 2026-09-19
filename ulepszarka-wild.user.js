@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ulepszator by Kruul
+// @name         ulepszator-test by Kruul
 // @namespace    http://tampermonkey.net/
-// @version      0.1.9
+// @version      0.1.10
 // @description  Auto ulepszanie i rozbijanie
 // @author       Kruul
 // @match        https://*.margonem.pl/
@@ -13,6 +13,23 @@
 const CONFIG = {
   DEFAULT_ALLOWED_RARITIES: ["common"],
   AVAILABLE_RARITIES: ["common", "unique", "heroic"],
+  RARITY_META: {
+    common: { label: "Zwykły", color: "#d4d4d8" },
+    unique: { label: "Unikat", color: "#eab308" },
+    heroic: { label: "Heroik", color: "#60a5fa" },
+    legendary: { label: "Legenda", color: "#f97316" },
+    artefact: { label: "Artefakt", color: "#a78bfa" },
+    upgrade: { label: "Ulepszenie", color: "#34d399" },
+  },
+  RARITY_BY_ITEM_TYPE: {
+    "t-com": "common",
+    "t-zwy": "common",
+    "t-uni": "unique",
+    "t-her": "heroic",
+    "t-leg": "legendary",
+    "t-art": "artefact",
+    "t-upg": "upgrade",
+  },
   DEFAULT_MODE: "enhancement",
   AVAILABLE_MODES: ["enhancement", "salvage"],
   MAX_REAGENTS: 25,
@@ -1718,7 +1735,7 @@ const ALLOWED_ITEM_TYPES = [
             right: 16px;
             top: 150px;
             width: 146px;
-            z-index: 12;
+            z-index: 99999;
             border: 1px solid var(--ql-border);
             border-radius: var(--ql-radius-lg);
             background: var(--ql-bg);
@@ -1803,14 +1820,14 @@ const ALLOWED_ITEM_TYPES = [
             position: fixed;
             right: 16px;
             top: 188px;
-            width: 340px;
+            width: 509px;
             z-index: 11;
             border: 1px solid var(--ql-border);
             border-radius: var(--ql-radius-lg);
             background: var(--ql-bg);
             backdrop-filter: blur(6px);
             color: var(--ql-text);
-            padding: 10px;
+            padding: 26px;
             display: none;
             box-sizing: border-box;
             overflow: visible;
@@ -1823,15 +1840,15 @@ const ALLOWED_ITEM_TYPES = [
             display: grid;
             grid-template-columns: auto 1fr auto;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-bottom: 10px;
             cursor: move;
-            padding: 3px 2px 8px 2px;
+            padding: 4px 2px 10px 2px;
             border-bottom: 1px solid var(--ql-border);
             color: var(--ql-text);
           }
           .upgrader-gui-title-text {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 800;
             letter-spacing: 0.2px;
             text-align: center;
@@ -1840,12 +1857,12 @@ const ALLOWED_ITEM_TYPES = [
           .upgrader-mode-corner {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
             justify-self: start;
           }
           .upgrader-mode-corner .upgrader-mode-value {
             min-width: 0;
-            font-size: 8px;
+            font-size: 9px;
             letter-spacing: 0.2px;
           }
           .upgrader-mode-corner .upgrader-mode-switch {
@@ -1861,13 +1878,13 @@ const ALLOWED_ITEM_TYPES = [
           }
           .upgrader-gui-close-btn {
             justify-self: end;
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             border: 1px solid var(--ql-border);
             border-radius: 999px;
             background: var(--ql-bg-soft);
             color: var(--ql-text-dim);
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 700;
             line-height: 1;
             cursor: pointer;
@@ -1881,30 +1898,30 @@ const ALLOWED_ITEM_TYPES = [
           .upgrader-grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 8px;
+            gap: 10px;
+            margin-top: 10px;
           }
           .upgrader-grid-3 {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-            margin-top: 8px;
+            gap: 10px;
+            margin-top: 10px;
           }
           .upgrader-card {
             border: 1px solid var(--ql-border);
             border-radius: var(--ql-radius-md);
-            padding: 8px;
+            padding: 10px;
             background: var(--ql-bg-softer);
             box-sizing: border-box;
             min-width: 0;
           }
           .upgrader-card-title {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.3px;
             text-transform: uppercase;
             color: var(--ql-text-dim);
-            margin-bottom: 6px;
+            margin-bottom: 7px;
           }
           .upgrader-card-hero {
             display: flex;
@@ -1913,39 +1930,34 @@ const ALLOWED_ITEM_TYPES = [
             text-align: center;
           }
           .upgrader-selected-preview-box-hero {
-            min-height: 56px;
+            min-height: 82px;
             justify-content: center;
           }
-          .upgrader-selected-preview-box-hero .upgrader-selected-preview-item,
-          .upgrader-selected-preview-box-hero .upgrader-selected-preview-icon {
-            width: 48px;
-            height: 48px;
-          }
-          .upgrader-selected-preview-box-hero .upgrader-selected-preview-item .highlight {
-            width: 48px !important;
-            height: 48px !important;
+          .upgrader-selected-preview-box-hero .upgrader-selected-preview-item {
+            width: 64px;
+            height: 64px;
           }
           .upgrader-gui-rarity-list-col {
             flex-direction: column;
-            gap: 6px;
+            gap: 7px;
           }
           .upgrader-gui-row {
             display: flex;
-            gap: 6px;
-            margin-top: 8px;
+            gap: 7px;
+            margin-top: 10px;
           }
           .upgrader-gui-btn {
             border: 1px solid var(--ql-border);
             border-radius: 999px;
             background: var(--ql-bg-soft);
             color: var(--ql-text);
-            height: 28px;
+            height: 34px;
             cursor: pointer;
           }
           .upgrader-gui-btn {
-            padding: 0 10px;
+            padding: 0 12px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
             flex: 1;
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -1956,32 +1968,36 @@ const ALLOWED_ITEM_TYPES = [
             border-color: var(--ql-white-pill);
           }
             .upgrader-select-hint {
-              margin-top: 8px;
+              margin-top: 10px;
               border: 1px solid var(--ql-border);
               border-radius: var(--ql-radius-md);
-              padding: 8px;
+              padding: 10px;
               background: var(--ql-bg-softer);
-              font-size: 10px;
+              font-size: 11px;
               line-height: 1.4;
               color: var(--ql-text-dim);
             }
             .upgrader-selected-preview-wrap {
-              margin-top: 8px;
+              margin-top: 10px;
               border: 1px solid var(--ql-border);
               border-radius: var(--ql-radius-md);
-              padding: 8px;
+              padding: 10px;
               background: var(--ql-bg-softer);
             }
             .upgrader-selected-preview-box {
-              min-height: 40px;
+              min-height: 48px;
               display: flex;
               align-items: center;
-              gap: 8px;
+              gap: 10px;
               position: relative;
             }
             .upgrader-selected-preview-item {
               width: 32px;
               height: 32px;
+              box-sizing: border-box;
+              border: 1px solid var(--ql-rarity-color, var(--ql-border));
+              box-shadow: 0 0 6px -1px var(--ql-rarity-glow, transparent);
+              background: rgba(255, 255, 255, 0.03);
               position: relative !important;
               left: 0 !important;
               top: 0 !important;
@@ -1994,52 +2010,56 @@ const ALLOWED_ITEM_TYPES = [
               overflow: hidden;
               border-radius: var(--ql-radius-sm);
             }
-            .upgrader-selected-preview-item .highlight {
-              position: absolute !important;
-              top: 0 !important;
-              left: 0 !important;
-              width: 32px !important;
-              height: 32px !important;
-              pointer-events: none;
-              z-index: 0;
-            }
             .upgrader-selected-preview-icon {
-              width: 32px;
-              height: 32px;
+              width: 100%;
+              height: 100%;
               display: block;
               flex: 0 0 auto;
-              image-rendering: auto;
+              image-rendering: pixelated;
+              object-fit: contain;
               position: relative;
               z-index: 1;
             }
             .upgrader-selected-preview-text {
-              font-size: 11px;
-              font-weight: 500;
-              color: var(--ql-text);
+              font-size: 12px;
+              font-weight: 600;
+              color: var(--ql-rarity-color, var(--ql-text));
               word-break: break-word;
             }
-            .upgrader-gui-rarity-wrap {
-              margin-top: 8px;
-              border: 1px solid var(--ql-border);
-              border-radius: var(--ql-radius-md);
-              padding: 8px;
-              background: var(--ql-bg-softer);
+            .upgrader-selected-preview-rarity {
+              margin-top: 2px;
+              font-size: 10px;
+              font-weight: 700;
+              letter-spacing: 0.4px;
+              text-transform: uppercase;
+              color: var(--ql-rarity-color, var(--ql-text-dim));
+              opacity: 0.85;
             }
-            .upgrader-mode-wrap {
-              margin-top: 8px;
+            .upgrader-selected-preview-rarity:empty {
+              display: none;
+            }
+            .upgrader-gui-rarity-wrap {
+              margin-top: 10px;
               border: 1px solid var(--ql-border);
               border-radius: var(--ql-radius-md);
               padding: 10px;
+              background: var(--ql-bg-softer);
+            }
+            .upgrader-mode-wrap {
+              margin-top: 10px;
+              border: 1px solid var(--ql-border);
+              border-radius: var(--ql-radius-md);
+              padding: 12px;
               background: var(--ql-bg-softer);
             }
             .upgrader-mode-row {
               display: flex;
               align-items: center;
               justify-content: space-between;
-              gap: 10px;
+              gap: 12px;
             }
             .upgrader-mode-label {
-              font-size: 11px;
+              font-size: 12px;
               font-weight: 700;
               color: var(--ql-text-dim);
               letter-spacing: 0.3px;
@@ -2050,7 +2070,7 @@ const ALLOWED_ITEM_TYPES = [
               align-items: center;
               justify-content: center;
               min-width: 96px;
-              font-size: 11px;
+              font-size: 12px;
               font-weight: 700;
               text-transform: uppercase;
               letter-spacing: 0.3px;
@@ -2103,23 +2123,23 @@ const ALLOWED_ITEM_TYPES = [
               background: var(--ql-orange);
             }
             .upgrader-gui-rarity-title {
-              font-size: 11px;
+              font-size: 12px;
               font-weight: 700;
               letter-spacing: 0.3px;
               text-transform: uppercase;
-              margin-bottom: 6px;
+              margin-bottom: 7px;
               color: var(--ql-text-dim);
             }
             .upgrader-gui-rarity-list {
               display: flex;
-              gap: 10px;
+              gap: 12px;
               flex-wrap: wrap;
             }
             .upgrader-gui-rarity-item {
               display: inline-flex;
               align-items: center;
-              gap: 5px;
-              font-size: 11px;
+              gap: 6px;
+              font-size: 12px;
               color: var(--ql-text);
             }
             .upgrader-rarity-common {
@@ -2132,20 +2152,20 @@ const ALLOWED_ITEM_TYPES = [
               color: var(--ql-blue);
             }
             .upgrader-bound-wrap {
-              margin-top: 8px;
+              margin-top: 10px;
               border: 1px solid var(--ql-border);
               border-radius: var(--ql-radius-md);
-              padding: 8px;
+              padding: 10px;
               background: var(--ql-bg-softer);
             }
             .upgrader-bound-item {
               display: flex;
               align-items: center;
               justify-content: space-between;
-              gap: 10px;
-              font-size: 11px;
+              gap: 12px;
+              font-size: 12px;
               color: var(--ql-text);
-              margin-bottom: 6px;
+              margin-bottom: 7px;
             }
             .upgrader-bound-item span:first-child {
               font-weight: 500;
@@ -2154,24 +2174,24 @@ const ALLOWED_ITEM_TYPES = [
               margin-bottom: 0;
             }
             .upgrader-bound-warning {
-              margin-top: 4px;
-              font-size: 10px;
+              margin-top: 5px;
+              font-size: 11px;
               color: var(--ql-red);
               display: inline-flex;
               align-items: center;
-              gap: 6px;
+              gap: 7px;
             }
             .upgrader-tooltip-trigger {
               position: relative;
               display: inline-flex;
               align-items: center;
               justify-content: center;
-              width: 14px;
-              height: 14px;
+              width: 16px;
+              height: 16px;
               border-radius: 50%;
               border: 1px solid var(--ql-border-strong);
               color: var(--ql-text-dim);
-              font-size: 10px;
+              font-size: 11px;
               line-height: 1;
               background: var(--ql-bg-soft);
               cursor: help;
@@ -2182,7 +2202,7 @@ const ALLOWED_ITEM_TYPES = [
               left: 0;
               bottom: calc(100% + 6px);
               max-width: 220px;
-              padding: 6px 8px;
+              padding: 7px 10px;
               border-radius: var(--ql-radius-sm);
               border: 1px solid var(--ql-border);
               background: #0a0a0b;
@@ -2195,47 +2215,49 @@ const ALLOWED_ITEM_TYPES = [
               pointer-events: none;
             }
             .upgrader-hotkeys-wrap {
-              margin-top: 8px;
+              margin-top: 10px;
               border: 1px solid var(--ql-border);
               border-radius: var(--ql-radius-md);
-              padding: 8px;
+              padding: 10px;
               background: var(--ql-bg-softer);
             }
             .upgrader-hotkeys-grid {
               display: grid;
-              grid-template-columns: 1fr 26px;
-              gap: 6px;
+              grid-template-columns: 1fr 38px;
+              gap: 7px;
               align-items: center;
             }
             .upgrader-hotkeys-label {
-              font-size: 11px;
+              font-size: 12px;
               font-weight: 500;
               color: var(--ql-text-dim);
               align-self: center;
             }
             .upgrader-hotkeys-input {
+              font-size: 12px;
+              font-weight: 700;
               border: 1px solid var(--ql-border-strong);
               border-radius: var(--ql-radius-sm);
               background: var(--ql-bg-soft);
               color: var(--ql-text);
-              height: 24px;
+              height: 29px;
               text-align: center;
               cursor: pointer;
             }
             .upgrader-auto-wrap {
-              margin-top: 8px;
+              margin-top: 10px;
               border: 1px solid var(--ql-border);
               border-radius: var(--ql-radius-md);
-              padding: 8px;
+              padding: 10px;
               background: var(--ql-bg-softer);
             }
             .upgrader-auto-row {
               display: flex;
               align-items: center;
               justify-content: space-between;
-              gap: 6px;
-              margin-bottom: 8px;
-              font-size: 11px;
+              gap: 7px;
+              margin-bottom: 10px;
+              font-size: 12px;
               color: var(--ql-text);
             }
             .upgrader-auto-row label {
@@ -2249,8 +2271,8 @@ const ALLOWED_ITEM_TYPES = [
               opacity: 0.4;
             }
             .upgrader-auto-info {
-              margin-top: 4px;
-              font-size: 10px;
+              margin-top: 5px;
+              font-size: 11px;
               color: var(--ql-text-dim);
             }
             .upgrader-gui-panel input[type="checkbox"] {
@@ -2409,6 +2431,91 @@ const ALLOWED_ITEM_TYPES = [
       $(`.item-id-${upgradedItemId}`).append(label);
     },
 
+    resolveItemIconUrl(item) {
+      const icon =
+        item?.icon || item?.tpl?.icon || item?._cachedStats?.icon || "";
+      if (!icon || typeof icon !== "string") return "";
+      if (/^(data:|https?:|\/\/)/.test(icon)) return icon;
+
+      const base =
+        window.CFG?.item_dir ||
+        window.Engine?.item_dir ||
+        "https://micc.garmory-cdn.cloud/obrazki/itemy/";
+
+      return `${String(base).replace(/\/?$/, "/")}${icon.replace(/^\//, "")}`;
+    },
+
+    buildIconDataUrlFromCanvas(sourceCanvas) {
+      const SIZE = 32;
+      const sourceWidth = sourceCanvas?.width || 0;
+      const sourceHeight = sourceCanvas?.height || 0;
+      if (!sourceWidth || !sourceHeight) return "";
+
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const context = canvas.getContext("2d");
+        if (!context) return "";
+
+        context.imageSmoothingEnabled = false;
+
+        const scale = Math.min(SIZE / sourceWidth, SIZE / sourceHeight);
+        const drawWidth = Math.max(1, Math.round(sourceWidth * scale));
+        const drawHeight = Math.max(1, Math.round(sourceHeight * scale));
+        const offsetX = Math.round((SIZE - drawWidth) / 2);
+        const offsetY = Math.round((SIZE - drawHeight) / 2);
+
+        context.drawImage(
+          sourceCanvas,
+          0,
+          0,
+          sourceWidth,
+          sourceHeight,
+          offsetX,
+          offsetY,
+          drawWidth,
+          drawHeight
+        );
+
+        return canvas.toDataURL("image/png");
+      } catch (error) {
+        return "";
+      }
+    },
+
+    resolveItemRarity(item, sourceNode) {
+      const fromStats = item?._cachedStats?.rarity;
+      if (fromStats && CONFIG.RARITY_META[fromStats]) return fromStats;
+
+      const itemType = sourceNode?.getAttribute?.("data-item-type");
+      if (itemType && CONFIG.RARITY_BY_ITEM_TYPE[itemType]) {
+        return CONFIG.RARITY_BY_ITEM_TYPE[itemType];
+      }
+
+      return fromStats || "";
+    },
+
+    applyRarityStyling(rarity) {
+      const wrap = document.getElementById("upgrader-selected-preview-wrap");
+      const rarityText = document.getElementById("upgrader-selected-preview-rarity");
+      const meta = CONFIG.RARITY_META[rarity];
+
+      if (wrap) {
+        if (meta) {
+          wrap.style.setProperty("--ql-rarity-color", meta.color);
+          wrap.style.setProperty("--ql-rarity-glow", `${meta.color}59`);
+        } else {
+          wrap.style.removeProperty("--ql-rarity-color");
+          wrap.style.removeProperty("--ql-rarity-glow");
+        }
+      }
+
+      if (rarityText) {
+        rarityText.textContent = meta ? meta.label : rarity ? rarity : "";
+      }
+    },
+
     renderSelectedItemPreview() {
       const previewBox = document.getElementById("upgrader-selected-preview-box");
       const previewText = document.getElementById("upgrader-selected-preview-text");
@@ -2419,48 +2526,52 @@ const ALLOWED_ITEM_TYPES = [
       const selectedId = Storage.getUpgradedItemId();
       if (!selectedId) {
         previewText.textContent = "Brak wybranego przedmiotu";
+        Ui.applyRarityStyling("");
         return;
       }
 
       const item = Engine.items.getItemById(selectedId);
       if (!item) {
         previewText.textContent = `Wybrany ID: ${selectedId} (poza plecakiem)`;
+        Ui.applyRarityStyling("");
         return;
       }
 
       const sourceNode = document.querySelector(`.item-id-${selectedId}`);
       if (sourceNode) {
         const sourceCanvas = sourceNode.querySelector("canvas.icon.canvas-icon");
-        const sourceHighlight = sourceNode.querySelector(".highlight");
 
-        if (sourceCanvas) {
+        const canvasFallback = Ui.buildIconDataUrlFromCanvas(sourceCanvas);
+        const iconUrl = Ui.resolveItemIconUrl(item);
+
+        if (canvasFallback || iconUrl) {
           const previewItem = document.createElement("div");
-          previewItem.className = "upgrader-selected-preview-item item";
+          previewItem.className = "upgrader-selected-preview-item";
 
           const iconPreview = document.createElement("img");
           iconPreview.className = "upgrader-selected-preview-icon";
           iconPreview.alt = item.name || "Wybrany przedmiot";
-          iconPreview.src = sourceCanvas.toDataURL("image/png");
+
+          if (iconUrl) {
+            iconPreview.src = iconUrl;
+            if (canvasFallback) {
+              iconPreview.onerror = () => {
+                iconPreview.onerror = null;
+                iconPreview.src = canvasFallback;
+              };
+            }
+          } else {
+            iconPreview.src = canvasFallback;
+          }
 
           previewItem.appendChild(iconPreview);
-
-          if (sourceHighlight) {
-            const highlightPreview = sourceHighlight.cloneNode(true);
-            const highlightStyles = window.getComputedStyle(sourceHighlight);
-
-            highlightPreview.style.backgroundImage = highlightStyles.backgroundImage;
-            highlightPreview.style.backgroundPosition = highlightStyles.backgroundPosition;
-            highlightPreview.style.backgroundSize = highlightStyles.backgroundSize;
-            highlightPreview.style.backgroundRepeat = highlightStyles.backgroundRepeat;
-
-            previewItem.appendChild(highlightPreview);
-          }
 
           previewBox.appendChild(previewItem);
         }
       }
 
       previewText.textContent = item.name;
+      Ui.applyRarityStyling(Ui.resolveItemRarity(item, sourceNode));
     },
 
     clearUpgradedItem() {
@@ -3930,6 +4041,7 @@ const ALLOWED_ITEM_TYPES = [
             <div class="upgrader-card-title">Wybrany przedmiot</div>
             <div id="upgrader-selected-preview-box" class="upgrader-selected-preview-box upgrader-selected-preview-box-hero"></div>
             <div id="upgrader-selected-preview-text" class="upgrader-selected-preview-text">Brak wybranego przedmiotu</div>
+            <div id="upgrader-selected-preview-rarity" class="upgrader-selected-preview-rarity"></div>
           </div>
 
           <div class="upgrader-card">
