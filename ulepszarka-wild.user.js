@@ -1,36 +1,14 @@
 // ==UserScript==
 // @name         ulepszator by Kruul
 // @namespace    http://tampermonkey.net/
-// @version      0.1.7
+// @version      0.1.8
 // @description  Auto ulepszanie i rozbijanie
 // @author       Kruul
-// @match        file:///*
+// @match        https://*.margonem.pl/
+// @updateURL    https://raw.githubusercontent.com/kruulxd/ulepszarka-demo/main/ulepszarka-wild.user.js
+// @downloadURL  https://raw.githubusercontent.com/kruulxd/ulepszarka-demo/main/ulepszarka-wild.user.js
 // @grant        none
 // ==/UserScript==
-//
-// === WERSJA DO TESTÓW LOKALNYCH (bez serwera) ===
-// Podmieniony @match na "file:///*", żeby Tampermonkey odpalał skrypt
-// na lokalnie otwartym pliku HTML (file://...), bez potrzeby stawiania
-// jakiegokolwiek serwera. Usunięte na czas testów: @updateURL, @downloadURL.
-//
-// Żeby to zadziałało:
-// 1. W ustawieniach rozszerzenia Tampermonkey włącz "Zezwalaj na dostęp do adresów URL plików"
-//    (Chrome: chrome://extensions -> Tampermonkey -> Szczegóły -> "Zezwalaj na dostęp do adresów URL plików").
-// 2. Zrób sobie lokalny plik .html z przykładowym DOM-em gry (albo pusty <body>) i otwórz go
-//    bezpośrednio w przeglądarce (file:///C:/.../test.html) - bez python -m http.server ani innego serwera.
-//
-// === PRZED WRZUCENIEM NA GITHUBA PRZYWRÓĆ ORYGINALNY NAGŁÓWEK: ===
-// // ==UserScript==
-// // @name         ulepszator by Kruul
-// // @namespace    http://tampermonkey.net/
-// // @version      0.1.7
-// // @description  Auto ulepszanie i rozbijanie
-// // @author       Kruul
-// // @match        https://*.margonem.pl/
-// // @updateURL    https://raw.githubusercontent.com/kruulxd/ulepszarka-demo/main/ulepszarka-wild.user.js
-// // @downloadURL  https://raw.githubusercontent.com/kruulxd/ulepszarka-demo/main/ulepszarka-wild.user.js
-// // @grant        none
-// // ==/UserScript==
 
 const CONFIG = {
   DEFAULT_ALLOWED_RARITIES: ["common"],
