@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ulepszator by Kruul
 // @namespace    http://tampermonkey.net/
-// @version      0.1.8
+// @version      0.1.9
 // @description  Auto ulepszanie i rozbijanie
 // @author       Kruul
 // @match        https://*.margonem.pl/
@@ -1803,7 +1803,7 @@ const ALLOWED_ITEM_TYPES = [
             position: fixed;
             right: 16px;
             top: 188px;
-            width: 264px;
+            width: 340px;
             z-index: 11;
             border: 1px solid var(--ql-border);
             border-radius: var(--ql-radius-lg);
@@ -1820,22 +1820,47 @@ const ALLOWED_ITEM_TYPES = [
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
           }
           .upgrader-gui-title {
-            position: relative;
-            display: flex;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
             align-items: center;
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.2px;
+            gap: 8px;
             margin-bottom: 8px;
             cursor: move;
-            padding: 3px 24px 8px 2px;
+            padding: 3px 2px 8px 2px;
             border-bottom: 1px solid var(--ql-border);
             color: var(--ql-text);
           }
+          .upgrader-gui-title-text {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            text-align: center;
+            color: var(--ql-text);
+          }
+          .upgrader-mode-corner {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            justify-self: start;
+          }
+          .upgrader-mode-corner .upgrader-mode-value {
+            min-width: 0;
+            font-size: 8px;
+            letter-spacing: 0.2px;
+          }
+          .upgrader-mode-corner .upgrader-mode-switch {
+            width: 30px;
+            height: 16px;
+          }
+          .upgrader-mode-corner .upgrader-mode-slider::before {
+            width: 12px;
+            height: 12px;
+          }
+          .upgrader-mode-corner .upgrader-mode-switch input:checked + .upgrader-mode-slider::before {
+            transform: translateX(14px);
+          }
           .upgrader-gui-close-btn {
-            position: absolute;
-            top: 0;
-            right: 0;
+            justify-self: end;
             width: 20px;
             height: 20px;
             border: 1px solid var(--ql-border);
@@ -1852,6 +1877,57 @@ const ALLOWED_ITEM_TYPES = [
           .upgrader-gui-close-btn:hover {
             background: var(--ql-white-pill);
             color: var(--ql-black-on-white);
+          }
+          .upgrader-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+          }
+          .upgrader-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+          }
+          .upgrader-card {
+            border: 1px solid var(--ql-border);
+            border-radius: var(--ql-radius-md);
+            padding: 8px;
+            background: var(--ql-bg-softer);
+            box-sizing: border-box;
+            min-width: 0;
+          }
+          .upgrader-card-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            color: var(--ql-text-dim);
+            margin-bottom: 6px;
+          }
+          .upgrader-card-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+          }
+          .upgrader-selected-preview-box-hero {
+            min-height: 56px;
+            justify-content: center;
+          }
+          .upgrader-selected-preview-box-hero .upgrader-selected-preview-item,
+          .upgrader-selected-preview-box-hero .upgrader-selected-preview-icon {
+            width: 48px;
+            height: 48px;
+          }
+          .upgrader-selected-preview-box-hero .upgrader-selected-preview-item .highlight {
+            width: 48px !important;
+            height: 48px !important;
+          }
+          .upgrader-gui-rarity-list-col {
+            flex-direction: column;
+            gap: 6px;
           }
           .upgrader-gui-row {
             display: flex;
@@ -2127,7 +2203,7 @@ const ALLOWED_ITEM_TYPES = [
             }
             .upgrader-hotkeys-grid {
               display: grid;
-              grid-template-columns: 1fr 38px;
+              grid-template-columns: 1fr 26px;
               gap: 6px;
               align-items: center;
             }
@@ -3837,72 +3913,79 @@ const ALLOWED_ITEM_TYPES = [
       panel.className = "upgrader-gui-panel";
       panel.innerHTML = `
         <div id="upgrader-gui-title" class="upgrader-gui-title">
-          <span>QuickForge - ustawienia</span>
-          <button id="upgrader-gui-close-btn" class="upgrader-gui-close-btn" type="button" aria-label="Zamknij panel">×</button>
-        </div>
-        <div class="upgrader-mode-wrap">
-          <div class="upgrader-mode-row">
-            <span class="upgrader-mode-label">Tryb działania</span>
+          <div class="upgrader-mode-corner">
             <span id="upgrader-mode-value" class="upgrader-mode-value">ULEPSZANIE</span>
             <label class="upgrader-mode-switch" for="upgrader-mode-toggle">
               <input id="upgrader-mode-toggle" type="checkbox" />
               <span class="upgrader-mode-slider"></span>
             </label>
           </div>
+          <span class="upgrader-gui-title-text">Quick Forge</span>
+          <button id="upgrader-gui-close-btn" class="upgrader-gui-close-btn" type="button" aria-label="Zamknij panel">×</button>
         </div>
         <div id="upgrader-select-hint" class="upgrader-select-hint">Wybór przedmiotu: kliknij PPM na itemie i użyj opcji „Ulepsz ten przedmiot”.</div>
-        <div id="upgrader-selected-preview-wrap" class="upgrader-selected-preview-wrap">
-          <div class="upgrader-gui-rarity-title">Wybrany przedmiot:</div>
-          <div id="upgrader-selected-preview-box" class="upgrader-selected-preview-box"></div>
-          <div id="upgrader-selected-preview-text" class="upgrader-selected-preview-text">Brak wybranego przedmiotu</div>
-        </div>
-        <div class="upgrader-gui-rarity-wrap">
-          <div class="upgrader-gui-rarity-title">Rarity składników:</div>
-          <div id="upgrader-rarity-list" class="upgrader-gui-rarity-list"></div>
-        </div>
-        <div class="upgrader-bound-wrap">
-          <div class="upgrader-gui-rarity-title">Blokada przedmiotów związanych:</div>
-          <label class="upgrader-bound-item" for="upgrader-allow-soulbound">
-            <span>Używaj przedmiotów związanych z właścicielem</span>
-            <input id="upgrader-allow-soulbound" type="checkbox" />
-          </label>
-          <label class="upgrader-bound-item" for="upgrader-allow-permbound">
-            <span>Używaj przedmiotów związanych na stałe</span>
-            <input id="upgrader-allow-permbound" type="checkbox" />
-          </label>
-          <div class="upgrader-bound-warning">Uwaga: włączenie może spalić ważne przedmioty.
-            <span class="upgrader-tooltip-trigger" data-tooltip="Ta reguła nie działa na heroiki oraz na przedmioty ulepszone">?</span>
+
+        <div class="upgrader-grid-2">
+          <div id="upgrader-selected-preview-wrap" class="upgrader-card upgrader-card-hero">
+            <div class="upgrader-card-title">Wybrany przedmiot</div>
+            <div id="upgrader-selected-preview-box" class="upgrader-selected-preview-box upgrader-selected-preview-box-hero"></div>
+            <div id="upgrader-selected-preview-text" class="upgrader-selected-preview-text">Brak wybranego przedmiotu</div>
+          </div>
+
+          <div class="upgrader-card">
+            <div class="upgrader-auto-row">
+              <label id="upgrader-auto-label" for="upgrader-auto-enabled">Auto ulepszanie</label>
+              <input id="upgrader-auto-enabled" type="checkbox" />
+            </div>
+            <div class="upgrader-auto-row">
+              <label for="upgrader-auto-min-free-slots">Próg wolnych slotów: <span id="upgrader-auto-min-free-slots-value">6</span></label>
+            </div>
+            <input
+              id="upgrader-auto-min-free-slots"
+              class="upgrader-auto-slider"
+              type="range"
+              min="${CONFIG.AUTO_MIN_FREE_SLOTS_RANGE.min}"
+              max="${CONFIG.AUTO_MIN_FREE_SLOTS_RANGE.max}"
+              value="${CONFIG.DEFAULT_AUTO_SETTINGS.minFreeSlots}"
+            />
+            <div id="upgrader-auto-free-slots-info" class="upgrader-auto-info"></div>
           </div>
         </div>
-        <div class="upgrader-auto-wrap">
-          <div class="upgrader-auto-row">
-            <label id="upgrader-auto-label" for="upgrader-auto-enabled">Auto ulepszanie</label>
-            <input id="upgrader-auto-enabled" type="checkbox" />
+
+        <div class="upgrader-grid-3">
+          <div class="upgrader-card">
+            <div class="upgrader-card-title">Rarity składników</div>
+            <div id="upgrader-rarity-list" class="upgrader-gui-rarity-list upgrader-gui-rarity-list-col"></div>
           </div>
-          <div class="upgrader-auto-row">
-            <label for="upgrader-auto-min-free-slots">Próg wolnych slotów: <span id="upgrader-auto-min-free-slots-value">6</span></label>
+
+          <div class="upgrader-card">
+            <div class="upgrader-card-title">Zwiazane przedmioty</div>
+            <label class="upgrader-bound-item" for="upgrader-allow-soulbound">
+              <span>Z właścicielem</span>
+              <input id="upgrader-allow-soulbound" type="checkbox" />
+            </label>
+            <label class="upgrader-bound-item" for="upgrader-allow-permbound">
+              <span>Na stałe</span>
+              <input id="upgrader-allow-permbound" type="checkbox" />
+            </label>
+            <div class="upgrader-bound-warning">Może spalić przedmioty.
+              <span class="upgrader-tooltip-trigger" data-tooltip="Ta reguła nie działa na heroiki oraz na przedmioty ulepszone">?</span>
+            </div>
           </div>
-          <input
-            id="upgrader-auto-min-free-slots"
-            class="upgrader-auto-slider"
-            type="range"
-            min="${CONFIG.AUTO_MIN_FREE_SLOTS_RANGE.min}"
-            max="${CONFIG.AUTO_MIN_FREE_SLOTS_RANGE.max}"
-            value="${CONFIG.DEFAULT_AUTO_SETTINGS.minFreeSlots}"
-          />
-          <div id="upgrader-auto-free-slots-info" class="upgrader-auto-info"></div>
+
+          <div class="upgrader-card">
+            <div class="upgrader-card-title">Skróty klawiszowe</div>
+            <div class="upgrader-hotkeys-grid">
+              <div class="upgrader-hotkeys-label">Ulepszanie</div>
+              <input id="upgrader-hotkey-enhance" maxlength="1" class="upgrader-hotkeys-input" />
+              <div class="upgrader-hotkeys-label">Rozbijanie</div>
+              <input id="upgrader-hotkey-salvage" maxlength="1" class="upgrader-hotkeys-input" />
+              <div class="upgrader-hotkeys-label">Ustawienia (SHIFT+)</div>
+              <input id="upgrader-hotkey-gui" maxlength="1" class="upgrader-hotkeys-input" />
+            </div>
+          </div>
         </div>
-        <div class="upgrader-hotkeys-wrap">
-          <div class="upgrader-gui-rarity-title">Skróty klawiszowe:</div>
-          <div class="upgrader-hotkeys-grid">
-            <div class="upgrader-hotkeys-label">Ulepszanie</div>
-            <input id="upgrader-hotkey-enhance" maxlength="1" class="upgrader-hotkeys-input" />
-            <div class="upgrader-hotkeys-label">Rozbijanie</div>
-            <input id="upgrader-hotkey-salvage" maxlength="1" class="upgrader-hotkeys-input" />
-            <div class="upgrader-hotkeys-label">Ustawienia (SHIFT+)</div>
-            <input id="upgrader-hotkey-gui" maxlength="1" class="upgrader-hotkeys-input" />
-          </div>
-        </div>
+
         <div class="upgrader-gui-row">
           <button id="upgrader-clear-btn" class="upgrader-gui-btn">Wyczyść</button>
           <button id="upgrader-rarity-save-btn" class="upgrader-gui-btn">Reset punktów</button>
