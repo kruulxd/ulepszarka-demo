@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ulepszator-demo by Kruul
 // @namespace    http://tampermonkey.net/
-// @version      0.1.11
-// @description  Auto ulepszanie i rozbijanie
+// @version      0.1.12
+// @description  Auto ulepszanie
 // @author       Kruul
 // @match        https://*.margonem.pl/
 // @updateURL    https://raw.githubusercontent.com/kruulxd/ulepszarka-demo/main/ulepszarka-wild.user.js
@@ -30,12 +30,9 @@ const CONFIG = {
     "t-art": "artefact",
     "t-upg": "upgrade",
   },
-  DEFAULT_MODE: "enhancement",
-  AVAILABLE_MODES: ["enhancement", "salvage"],
   MAX_REAGENTS: 25,
   DEFAULT_HOTKEYS: {
     enhance: "j",
-    salvage: "k",
     gui: "u",
   },
   DEFAULT_BUTTON_POSITION: {
@@ -129,20 +126,16 @@ const ALLOWED_ITEM_TYPES = [
     enhanceCounter: null,
     dailyEnhancePoints: CONFIG.DAILY_POINTS_DEFAULT,
     enhancementProgressHooked: false,
-    salvageMessageHooked: false,
     lastProgressEventKey: null,
     lastProgressEventAt: 0,
     enhancementRunSummary: null,
-    salvageReceivedItems: [],
     isEnhancing: false,
-    mode: CONFIG.DEFAULT_MODE,
     lastAutoTriggerAt: 0,
     viewportSize: null,
     hasInterfaceWidget: false,
     interfaceWidgetDragObserver: null,
     launcherVisible: false,
     enhancementNotificationTimer: null,
-    salvageNotificationTimer: null,
   };
 
   const Utils = {
@@ -461,10 +454,6 @@ const ALLOWED_ITEM_TYPES = [
       return `upgrader-bound-settings-charId-${Engine.hero.d.id}`;
     },
 
-    getModeKey() {
-      return `upgrader-mode-charId-${Engine.hero.d.id}`;
-    },
-
     getEnhanceCounterKey() {
       return "upgrader-enhance-counter-shared";
     },
@@ -537,27 +526,13 @@ const ALLOWED_ITEM_TYPES = [
           return { ...CONFIG.DEFAULT_HOTKEYS };
         }
 
-        const hasLegacyExtract = Object.prototype.hasOwnProperty.call(
-          parsed,
-          "extract"
-        );
-        const hasSalvage = Object.prototype.hasOwnProperty.call(parsed, "salvage");
-        const legacySalvageHotkey = parsed?.salvage ?? parsed?.extract;
         const normalized = {
           enhance: Utils.normalizeHotkey(
             parsed?.enhance,
             CONFIG.DEFAULT_HOTKEYS.enhance
           ),
-          salvage: Utils.normalizeHotkey(
-            legacySalvageHotkey,
-            CONFIG.DEFAULT_HOTKEYS.salvage
-          ),
           gui: Utils.normalizeHotkey(parsed?.gui, CONFIG.DEFAULT_HOTKEYS.gui),
         };
-
-        if (hasLegacyExtract && !hasSalvage) {
-          Storage.setHotkeys(normalized);
-        }
 
         return normalized;
       } catch (error) {
@@ -570,10 +545,6 @@ const ALLOWED_ITEM_TYPES = [
         enhance: Utils.normalizeHotkey(
           hotkeys?.enhance,
           CONFIG.DEFAULT_HOTKEYS.enhance
-        ),
-        salvage: Utils.normalizeHotkey(
-          hotkeys?.salvage,
-          CONFIG.DEFAULT_HOTKEYS.salvage
         ),
         gui: Utils.normalizeHotkey(hotkeys?.gui, CONFIG.DEFAULT_HOTKEYS.gui),
       };
@@ -802,30 +773,6 @@ const ALLOWED_ITEM_TYPES = [
       return normalized;
     },
 
-    getMode() {
-      const saved = window.localStorage.getItem(Storage.getModeKey());
-      if (!saved) {
-        return CONFIG.DEFAULT_MODE;
-      }
-
-      if (saved === "extraction") {
-        return "salvage";
-      }
-
-      return CONFIG.AVAILABLE_MODES.includes(saved)
-        ? saved
-        : CONFIG.DEFAULT_MODE;
-    },
-
-    setMode(mode) {
-      const normalized = CONFIG.AVAILABLE_MODES.includes(mode)
-        ? mode
-        : CONFIG.DEFAULT_MODE;
-
-      window.localStorage.setItem(Storage.getModeKey(), normalized);
-      return normalized;
-    },
-
     getEnhanceCounter() {
       const saved = window.localStorage.getItem(Storage.getEnhanceCounterKey());
       const legacySaved = window.localStorage.getItem(
@@ -1017,163 +964,6 @@ const ALLOWED_ITEM_TYPES = [
     },
   };
 
-  const SalvageApi = {
-    clickNode(node) {
-      if (!node) return false;
-      const eventInit = { bubbles: true, cancelable: true };
-      node.dispatchEvent(new MouseEvent("mousedown", eventInit));
-      node.dispatchEvent(new MouseEvent("mouseup", eventInit));
-      node.dispatchEvent(new MouseEvent("click", eventInit));
-      return true;
-    },
-
-    async waitForRemovedCount(itemIds = [], attempts = 12, delay = 110) {
-      let removedCount = 0;
-      for (let attempt = 0; attempt < attempts; attempt += 1) {
-        await Utils.sleep(delay);
-        removedCount = itemIds.reduce(
-          (acc, id) => acc + (Engine.items.getItemById(id) ? 0 : 1),
-          0
-        );
-        if (removedCount > 0) break;
-      }
-      return removedCount;
-    },
-
-    async runDirectSalvageBatch(itemIds = []) {
-      const availableItemIds = itemIds.filter((itemId) =>
-        Boolean(Engine.items.getItemById(itemId))
-      );
-      if (availableItemIds.length === 0) return 0;
-      if (typeof _g !== "function") return 0;
-
-      const selectedItems = availableItemIds.join(",");
-
-      await new Promise((resolve) => {
-        _g(`salvager&action=salvage&selectedItems=${selectedItems}`, () => {
-          resolve();
-        });
-      });
-
-      return SalvageApi.waitForRemovedCount(availableItemIds, 14, 90);
-    },
-
-    async submitAndConfirmSalvage() {
-      const submitButton =
-        document.querySelector(".salvage__submit .button.small.green") ||
-        document.querySelector(".salvage__submit .button");
-      if (!SalvageApi.clickNode(submitButton)) return false;
-
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        await Utils.sleep(80);
-        const confirmButton =
-          document.querySelector(
-            ".window-controlls .button.small.alert-accept-hotkey"
-          ) ||
-          document.querySelector(".window-controlls .alert-accept-hotkey");
-        if (!confirmButton) continue;
-        SalvageApi.clickNode(confirmButton);
-        return true;
-      }
-
-      return false;
-    },
-
-    async runUiSalvagePass(itemIds = []) {
-      const passItems = itemIds.filter((itemId) => Boolean(Engine.items.getItemById(itemId)));
-      if (passItems.length === 0) return 0;
-
-      const tabReady = await Ui.ensureCraftingModeTab();
-      if (!tabReady) return 0;
-
-      for (const itemId of passItems) {
-        const itemNode = document.querySelector(`.item-id-${itemId}`);
-        if (!itemNode) continue;
-        SalvageApi.clickNode(itemNode);
-        await Utils.sleep(95);
-      }
-
-      await Utils.sleep(230);
-
-      const confirmed = await SalvageApi.submitAndConfirmSalvage();
-      if (!confirmed) return 0;
-
-      const removedInPass = await SalvageApi.waitForRemovedCount(passItems, 16, 120);
-
-      for (let attempt = 0; attempt < 25; attempt += 1) {
-        await Utils.sleep(100);
-        const stillActive = document.querySelector(".salvage__submit .button.small.green");
-        if (!stillActive) break;
-      }
-
-      return removedInPass;
-    },
-
-    async salvageItemsBatchThroughUi(itemIds = []) {
-      const availableItemIds = itemIds.filter((itemId) =>
-        Boolean(Engine.items.getItemById(itemId))
-      );
-      if (availableItemIds.length === 0) return 0;
-
-      const directRemoved = await SalvageApi.runDirectSalvageBatch(
-        availableItemIds
-      );
-      if (directRemoved > 0) {
-        return directRemoved;
-      }
-
-      let removedTotal = 0;
-      let pendingItemIds = [...availableItemIds];
-      let noProgressPasses = 0;
-      let adaptiveChunkSize = Math.min(12, pendingItemIds.length);
-
-      for (let pass = 0; pass < 50; pass += 1) {
-        pendingItemIds = pendingItemIds.filter((id) => Boolean(Engine.items.getItemById(id)));
-        if (pendingItemIds.length === 0) break;
-
-        const currentChunkSize = Math.max(1, Math.min(adaptiveChunkSize, pendingItemIds.length));
-        const passItemIds = pendingItemIds.slice(0, currentChunkSize);
-        const removedInPass = await SalvageApi.runUiSalvagePass(passItemIds);
-
-        pendingItemIds = pendingItemIds.filter((id) => Boolean(Engine.items.getItemById(id)));
-        removedTotal += removedInPass;
-
-        if (removedInPass <= 0) {
-          noProgressPasses += 1;
-          adaptiveChunkSize = Math.max(1, Math.floor(currentChunkSize / 2));
-        } else {
-          noProgressPasses = 0;
-
-          if (removedInPass < passItemIds.length) {
-            adaptiveChunkSize = Math.max(1, Math.floor(currentChunkSize / 2));
-          } else if (currentChunkSize < 12) {
-            adaptiveChunkSize = Math.min(12, currentChunkSize + 1);
-          }
-        }
-
-        if (noProgressPasses >= 6) break;
-      }
-
-      pendingItemIds = pendingItemIds.filter((id) => Boolean(Engine.items.getItemById(id)));
-      if (pendingItemIds.length > 0) {
-        for (const itemId of pendingItemIds) {
-          if (!Engine.items.getItemById(itemId)) continue;
-
-          const removedSingle = await SalvageApi.runUiSalvagePass([itemId]);
-          removedTotal += removedSingle;
-
-          if (!Engine.items.getItemById(itemId)) {
-            continue;
-          }
-
-          const retryRemovedSingle = await SalvageApi.runUiSalvagePass([itemId]);
-          removedTotal += retryRemovedSingle;
-        }
-      }
-
-      return removedTotal;
-    },
-  };
 
   const Inventory = {
     isTruthyStatValue(value) {
@@ -1466,10 +1256,6 @@ const ALLOWED_ITEM_TYPES = [
       }, []);
 
       return [...new Set(reagents)];
-    },
-
-    getItemsForSalvage() {
-      return Inventory.getReagents();
     },
 
     getFreeSlotsInfo() {
@@ -1938,7 +1724,7 @@ const ALLOWED_ITEM_TYPES = [
           }
           .upgrader-gui-title {
             display: grid;
-            grid-template-columns: auto 1fr auto;
+            grid-template-columns: 1fr auto;
             align-items: center;
             gap: 10px;
             margin-bottom: 10px;
@@ -1953,28 +1739,6 @@ const ALLOWED_ITEM_TYPES = [
             letter-spacing: 0.2px;
             text-align: center;
             color: var(--ql-text);
-          }
-          .upgrader-mode-corner {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            justify-self: start;
-          }
-          .upgrader-mode-corner .upgrader-mode-value {
-            min-width: 0;
-            font-size: 9px;
-            letter-spacing: 0.2px;
-          }
-          .upgrader-mode-corner .upgrader-mode-switch {
-            width: 30px;
-            height: 16px;
-          }
-          .upgrader-mode-corner .upgrader-mode-slider::before {
-            width: 12px;
-            height: 12px;
-          }
-          .upgrader-mode-corner .upgrader-mode-switch input:checked + .upgrader-mode-slider::before {
-            transform: translateX(14px);
           }
           .upgrader-gui-close-btn {
             justify-self: end;
@@ -2144,83 +1908,6 @@ const ALLOWED_ITEM_TYPES = [
               border-radius: var(--ql-radius-md);
               padding: 10px;
               background: var(--ql-bg-softer);
-            }
-            .upgrader-mode-wrap {
-              margin-top: 10px;
-              border: 1px solid var(--ql-border);
-              border-radius: var(--ql-radius-md);
-              padding: 12px;
-              background: var(--ql-bg-softer);
-            }
-            .upgrader-mode-row {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              gap: 12px;
-            }
-            .upgrader-mode-label {
-              font-size: 12px;
-              font-weight: 700;
-              color: var(--ql-text-dim);
-              letter-spacing: 0.3px;
-              text-transform: uppercase;
-            }
-            .upgrader-mode-value {
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              min-width: 96px;
-              font-size: 12px;
-              font-weight: 700;
-              text-transform: uppercase;
-              letter-spacing: 0.3px;
-            }
-            .upgrader-mode-value--enhancement {
-              color: var(--ql-blue);
-            }
-            .upgrader-mode-value--salvage {
-              color: var(--ql-orange);
-            }
-            .upgrader-mode-switch {
-              position: relative;
-              display: inline-flex;
-              width: 40px;
-              height: 22px;
-              cursor: pointer;
-            }
-            .upgrader-mode-switch input {
-              opacity: 0;
-              width: 0;
-              height: 0;
-            }
-            .upgrader-mode-slider {
-              position: absolute;
-              inset: 0;
-              border-radius: 999px;
-              border: 1px solid var(--ql-border-strong);
-              background: rgba(255, 255, 255, 0.08);
-              box-sizing: border-box;
-              overflow: hidden;
-              transition: background 0.2s ease, border-color 0.2s ease;
-            }
-            .upgrader-mode-slider::before {
-              content: "";
-              position: absolute;
-              width: 16px;
-              height: 16px;
-              left: 2px;
-              top: 2px;
-              border-radius: 50%;
-              background: var(--ql-text-dim);
-              transition: transform 0.2s ease, background 0.2s ease;
-            }
-            .upgrader-mode-switch input:checked + .upgrader-mode-slider {
-              background: rgba(251, 146, 60, 0.16);
-              border-color: rgba(251, 146, 60, 0.5);
-            }
-            .upgrader-mode-switch input:checked + .upgrader-mode-slider::before {
-              transform: translateX(18px);
-              background: var(--ql-orange);
             }
             .upgrader-gui-rarity-title {
               font-size: 12px;
@@ -2437,68 +2124,16 @@ const ALLOWED_ITEM_TYPES = [
 
     prepareEnhancementWindow() {
       const wasOpenBeforeRun = Ui.isCraftingWindowOpen();
-      const hideCssClass =
-        state.mode === "salvage" ? null : "upgrader-crafting-window";
+      const hideCssClass = "upgrader-crafting-window";
 
       if (!wasOpenBeforeRun) {
-        if (hideCssClass) {
-          Engine.crafting.window.wnd.$.addClass(hideCssClass);
-        }
+        Engine.crafting.window.wnd.$.addClass(hideCssClass);
         Engine.interface.clickCrafting();
       } else {
-        if (hideCssClass) {
-          Engine.crafting.window.wnd.$.addClass(hideCssClass);
-        }
+        Engine.crafting.window.wnd.$.addClass(hideCssClass);
       }
-
-      Ui.ensureCraftingModeTab();
 
       return { wasOpenBeforeRun, hideCssClass };
-    },
-
-    async ensureCraftingModeTab() {
-      if (state.mode !== "salvage") {
-        return true;
-      }
-
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const salvageTab =
-          document.querySelector(
-            '.one-item-on-divide-list.crafting-recipe-in-list[data-tab-id="salvage"]'
-          ) ||
-          document.querySelector(
-            '.one-item-on-divide-list.crafting-recipe-in-list[data-tab-id="extraction"]'
-          );
-
-        if (!salvageTab) {
-          await Utils.sleep(80);
-          continue;
-        }
-
-        salvageTab.dispatchEvent(
-          new MouseEvent("mousedown", { bubbles: true, cancelable: true })
-        );
-        salvageTab.dispatchEvent(
-          new MouseEvent("mouseup", { bubbles: true, cancelable: true })
-        );
-        salvageTab.dispatchEvent(
-          new MouseEvent("click", { bubbles: true, cancelable: true })
-        );
-
-        await Utils.sleep(90);
-
-        const isActive =
-          salvageTab.classList.contains("active") ||
-          salvageTab.classList.contains("selected") ||
-          salvageTab.classList.contains("crafting-recipe-in-list-active") ||
-          salvageTab.getAttribute("aria-selected") === "true";
-
-        if (isActive) {
-          return true;
-        }
-      }
-
-      return false;
     },
 
     restoreEnhancementWindow(session = {}) {
@@ -2827,15 +2462,11 @@ const ALLOWED_ITEM_TYPES = [
           enabled: toggle.checked,
         });
 
-        const autoModeLabel = state.mode === "salvage" ? "rozbijanie" : "ulepszanie";
-        const autoModeLabelCapitalized =
-          state.mode === "salvage" ? "Auto rozbijanie" : "Auto ulepszanie";
-
         Ui.renderAutoSettings();
         message(
           state.autoSettings.enabled
-            ? `${autoModeLabelCapitalized} włączone (próg: ${state.autoSettings.minFreeSlots} wolnych slotów)`
-            : `${autoModeLabelCapitalized} wyłączone`
+            ? `Auto ulepszanie włączone (próg: ${state.autoSettings.minFreeSlots} wolnych slotów)`
+            : "Auto ulepszanie wyłączone"
         );
       });
 
@@ -2849,11 +2480,9 @@ const ALLOWED_ITEM_TYPES = [
           minFreeSlots: slider.value,
         });
 
-        const autoModeLabel = state.mode === "salvage" ? "rozbijania" : "ulepszania";
-
         Ui.renderAutoSettings();
         message(
-          `Zapisano próg auto-${autoModeLabel}: ${state.autoSettings.minFreeSlots} wolnych slotów`
+          `Zapisano próg auto-ulepszania: ${state.autoSettings.minFreeSlots} wolnych slotów`
         );
       });
     },
@@ -2915,7 +2544,7 @@ const ALLOWED_ITEM_TYPES = [
         input.className = "upgrader-rarity-checkbox";
         input.value = rarity;
         input.checked = selectedRarities.includes(rarity);
-        input.disabled = state.mode === "salvage" && rarity === "heroic";
+        input.disabled = false;
 
         const span = document.createElement("span");
   span.textContent = rarityMeta[rarity]?.label || rarity;
@@ -2927,91 +2556,25 @@ const ALLOWED_ITEM_TYPES = [
       });
     },
 
-    enforceSafeRaritiesForMode(showMessage = false) {
-      if (state.mode !== "salvage") {
-        return;
-      }
-
-      const selected = Storage.getAllowedRarities();
-      if (!selected.includes("heroic")) {
-        return;
-      }
-
-      const withoutHeroic = selected.filter((rarity) => rarity !== "heroic");
-      Storage.setAllowedRarities(withoutHeroic);
-
-      if (showMessage) {
-        message("W trybie rozbijania heroiki są automatycznie wyłączone.");
-      }
-    },
-
-    renderModeSwitch() {
-      const modeToggle = document.getElementById("upgrader-mode-toggle");
-      const modeValue = document.getElementById("upgrader-mode-value");
-      if (!modeToggle || !modeValue) return;
-
-      const isSalvage = state.mode === "salvage";
-      modeToggle.checked = isSalvage;
-      modeValue.textContent = isSalvage ? "ROZBIJANIE" : "ULEPSZANIE";
-      modeValue.className = `upgrader-mode-value ${
-        isSalvage
-          ? "upgrader-mode-value--salvage"
-          : "upgrader-mode-value--enhancement"
-      }`;
-    },
-
     renderModeDependentTexts() {
       const manualButton = document.getElementById("upgrader-launcher-enhance-btn");
       const hint = document.getElementById("upgrader-select-hint");
       const autoLabel = document.getElementById("upgrader-auto-label");
-      const previewWrap = document.getElementById("upgrader-selected-preview-wrap");
-      const launcherItemWrap = document.getElementById("upgrader-launcher-item-wrap");
-      const launcherProgressWrap = document.getElementById("upgrader-launcher-progress-wrap");
 
-      const isSalvage = state.mode === "salvage";
       const hotkeys = state.hotkeys || CONFIG.DEFAULT_HOTKEYS;
-      const activeHotkey = (isSalvage ? hotkeys.salvage : hotkeys.enhance || "").toUpperCase();
+      const activeHotkey = (hotkeys.enhance || "").toUpperCase();
 
       if (manualButton) {
-        const actionLabel = isSalvage ? "ROZBIJ" : "ULEPSZ";
-        manualButton.textContent = activeHotkey ? `${actionLabel} (${activeHotkey})` : actionLabel;
+        manualButton.textContent = activeHotkey ? `ULEPSZ (${activeHotkey})` : "ULEPSZ";
       }
 
       if (hint) {
-        hint.textContent = isSalvage
-          ? "Tryb rozbijania: addon użyje wybranych rzadkości i rozbije pasujące przedmioty."
-          : "Wybór przedmiotu: kliknij PPM na itemie i użyj opcji „Ulepsz ten przedmiot”.";
+        hint.textContent = "Wybór przedmiotu: kliknij PPM na itemie i użyj opcji „Ulepsz ten przedmiot”.";
       }
 
       if (autoLabel) {
-        autoLabel.textContent = isSalvage ? "Auto rozbijanie" : "Auto ulepszanie";
+        autoLabel.textContent = "Auto ulepszanie";
       }
-
-      if (previewWrap) {
-        previewWrap.style.display = isSalvage ? "none" : "block";
-      }
-
-      if (launcherItemWrap) {
-        launcherItemWrap.style.display = isSalvage ? "none" : "block";
-      }
-
-      if (launcherProgressWrap) {
-        launcherProgressWrap.style.display = isSalvage ? "none" : "block";
-      }
-    },
-
-    bindModeHandlers() {
-      const modeToggle = document.getElementById("upgrader-mode-toggle");
-      if (!modeToggle) return;
-
-      modeToggle.addEventListener("change", () => {
-        state.mode = Storage.setMode(modeToggle.checked ? "salvage" : "enhancement");
-        Ui.enforceSafeRaritiesForMode(true);
-        Ui.renderModeSwitch();
-        Ui.renderModeDependentTexts();
-        Ui.renderRarityOptions();
-
-      });
     },
 
     getSelectedRaritiesFromGui() {
@@ -3021,24 +2584,20 @@ const ALLOWED_ITEM_TYPES = [
 
     renderHotkeyInputs() {
       const enhanceInput = document.getElementById("upgrader-hotkey-enhance");
-      const salvageInput = document.getElementById("upgrader-hotkey-salvage");
       const guiInput = document.getElementById("upgrader-hotkey-gui");
-      if (!enhanceInput || !salvageInput || !guiInput) return;
+      if (!enhanceInput || !guiInput) return;
 
       const hotkeys = state.hotkeys || { ...CONFIG.DEFAULT_HOTKEYS };
       enhanceInput.value = hotkeys.enhance;
-      salvageInput.value = hotkeys.salvage;
       guiInput.value = hotkeys.gui;
     },
 
     getHotkeysFromGui() {
       const enhanceInput = document.getElementById("upgrader-hotkey-enhance");
-      const salvageInput = document.getElementById("upgrader-hotkey-salvage");
       const guiInput = document.getElementById("upgrader-hotkey-gui");
 
       return {
         enhance: enhanceInput?.value,
-        salvage: salvageInput?.value,
         gui: guiInput?.value,
       };
     },
@@ -3883,11 +3442,6 @@ const ALLOWED_ITEM_TYPES = [
           return;
         }
 
-        if (state.mode === "salvage" && target.value === "heroic" && target.checked) {
-          target.checked = false;
-          return;
-        }
-
         const selectedRarities = Ui.getSelectedRaritiesFromGui();
         if (selectedRarities.length === 0) {
           target.checked = true;
@@ -4074,80 +3628,6 @@ const ALLOWED_ITEM_TYPES = [
       }, 3500);
     },
 
-    showSalvageCompletionNotification(data) {
-      const notificationId = "upgrader-salvage-notification";
-      let notification = document.getElementById(notificationId);
-
-      // Anuluj poprzedni timer jeśli istnieje
-      if (state.salvageNotificationTimer) {
-        clearTimeout(state.salvageNotificationTimer);
-        state.salvageNotificationTimer = null;
-      }
-
-      if (!notification) {
-        notification = document.createElement("div");
-        notification.id = notificationId;
-        notification.style.cssText = `
-          position: fixed;
-          top: 30%;
-          left: 50%;
-          transform: translate(-50%, -50%) scale(0.9);
-          z-index: 99999;
-          min-width: 320px;
-          max-width: 420px;
-          padding: 24px 32px;
-          border-radius: 16px;
-          background: linear-gradient(135deg, rgba(35,15,10,0.98) 0%, rgba(140,60,45,0.96) 50%, rgba(180,90,75,0.95) 100%);
-          backdrop-filter: blur(10px);
-          box-shadow: 0 20px 60px rgba(140,60,45,0.6), 0 0 0 1px rgba(247,120,85,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
-          color: #ffffff;
-          font-family: "Segoe UI Variable", "Segoe UI", "Trebuchet MS", Tahoma, sans-serif;
-          text-align: center;
-          pointer-events: none;
-          opacity: 0;
-          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        `;
-        document.body.appendChild(notification);
-      }
-
-      // Resetuj stan powiadomienia
-      notification.style.opacity = "0";
-      notification.style.transform = "translate(-50%, -50%) scale(0.9)";
-
-      const remainingInfo = data.remainingItems > 0 
-        ? `<div style="font-size: 13px; font-weight: 500; margin-top: 14px; opacity: 0.85; color: #ffd7cc; padding: 8px 16px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-             ⚠️ Zostało ${data.remainingItems} przedmiotów<br/>
-             <span style="font-size: 11px; opacity: 0.8;">nie udało się ich już zaznaczyć</span>
-           </div>`
-        : `<div style="font-size: 13px; font-weight: 600; margin-top: 14px; opacity: 0.9; color: #a7f3d0;">
-             ✓ Wszystko rozbite pomyślnie!
-           </div>`;
-
-      notification.innerHTML = `
-        <div style="font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; opacity: 0.85; color: #ffd7cc;">
-          🔨 Rozbijanie zakończone
-        </div>
-        <div style="font-size: 32px; font-weight: 900; margin-bottom: 14px; text-shadow: 0 3px 12px rgba(0,0,0,0.4); line-height: 1.2; letter-spacing: -0.5px; color: #fbbf24;">
-          ${data.count}
-        </div>
-        <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; opacity: 0.95; color: #ffd7cc;">
-          ${data.count === 1 ? 'przedmiot rozbity' : 'przedmiotów rozbitych'}
-        </div>
-        ${remainingInfo}
-      `;
-
-      requestAnimationFrame(() => {
-        notification.style.opacity = "1";
-        notification.style.transform = "translate(-50%, -50%) scale(1)";
-      });
-
-      state.salvageNotificationTimer = setTimeout(() => {
-        notification.style.opacity = "0";
-        notification.style.transform = "translate(-50%, -60%) scale(0.95)";
-        state.salvageNotificationTimer = null;
-      }, 3500);
-    },
-
     toggleGui() {
       const panel = document.getElementById("upgrader-gui-panel");
       if (!panel) return;
@@ -4156,8 +3636,6 @@ const ALLOWED_ITEM_TYPES = [
       panel.style.display = state.guiVisible ? "block" : "none";
 
       if (state.guiVisible) {
-        Ui.enforceSafeRaritiesForMode();
-        Ui.renderModeSwitch();
         Ui.renderModeDependentTexts();
         Ui.applyPanelPosition();
         Ui.renderSelectedItemPreview();
@@ -4208,13 +3686,6 @@ const ALLOWED_ITEM_TYPES = [
       panel.className = "upgrader-gui-panel";
       panel.innerHTML = `
         <div id="upgrader-gui-title" class="upgrader-gui-title">
-          <div class="upgrader-mode-corner">
-            <span id="upgrader-mode-value" class="upgrader-mode-value">ULEPSZANIE</span>
-            <label class="upgrader-mode-switch" for="upgrader-mode-toggle">
-              <input id="upgrader-mode-toggle" type="checkbox" />
-              <span class="upgrader-mode-slider"></span>
-            </label>
-          </div>
           <span class="upgrader-gui-title-text">Quick Forge</span>
           <button id="upgrader-gui-close-btn" class="upgrader-gui-close-btn" type="button" aria-label="Zamknij panel">×</button>
         </div>
@@ -4274,8 +3745,6 @@ const ALLOWED_ITEM_TYPES = [
             <div class="upgrader-hotkeys-grid">
               <div class="upgrader-hotkeys-label">Ulepszanie</div>
               <input id="upgrader-hotkey-enhance" maxlength="1" class="upgrader-hotkeys-input" />
-              <div class="upgrader-hotkeys-label">Rozbijanie</div>
-              <input id="upgrader-hotkey-salvage" maxlength="1" class="upgrader-hotkeys-input" />
               <div class="upgrader-hotkeys-label">Ustawienia (SHIFT+)</div>
               <input id="upgrader-hotkey-gui" maxlength="1" class="upgrader-hotkeys-input" />
             </div>
@@ -4305,7 +3774,6 @@ const ALLOWED_ITEM_TYPES = [
       Ui.bindAutoSettingsHandlers();
       Ui.bindBoundSettingsHandlers();
       Ui.bindRarityAutoSaveHandlers();
-      Ui.bindModeHandlers();
       Ui.bindTooltipHandlers();
 
       document
@@ -4347,8 +3815,6 @@ const ALLOWED_ITEM_TYPES = [
       }
 
       Ui.renderSelectedItemPreview();
-      Ui.enforceSafeRaritiesForMode();
-      Ui.renderModeSwitch();
       Ui.renderModeDependentTexts();
       Ui.renderRarityOptions();
       Ui.renderBoundSettings();
@@ -4405,119 +3871,7 @@ const ALLOWED_ITEM_TYPES = [
 
   const Automation = {
     async runPrimaryAction(options = {}) {
-      if (state.mode === "salvage") {
-        return Automation.salvageEligibleItems(options);
-      }
-
       return Automation.enhanceSelectedItem(options);
-    },
-
-    async salvageEligibleItems(options = {}) {
-      const { silent = false } = options;
-
-      const result = {
-        status: "idle",
-        reachedLimit: false,
-        reachedMaxEnhancement: false,
-        itemName: null,
-      };
-
-      if (state.isEnhancing) {
-        result.status = "busy";
-        return result;
-      }
-
-      state.isEnhancing = true;
-
-      const items = Inventory.getItemsForSalvage();
-      if (items.length === 0) {
-        result.status = "missing-reagents";
-        if (!silent) {
-          message("Nie znaleziono przedmiotów do rozbijania.");
-        }
-        state.isEnhancing = false;
-        return result;
-      }
-
-      let enhancementSession = null;
-
-      try {
-        result.status = "running";
-        state.salvageReceivedItems = [];
-        enhancementSession = Ui.prepareEnhancementWindow();
-        await Utils.sleep(150);
-        const switchedToSalvage = await Ui.ensureCraftingModeTab();
-
-        if (!switchedToSalvage) {
-          result.status = "failed";
-          if (!silent) {
-            message("Nie udało się przełączyć zakładki rzemiosła na rozbijanie.", "err");
-          }
-          return result;
-        }
-
-        let successCount = 0;
-        let noProgressRounds = 0;
-
-        for (let round = 0; round < 120; round += 1) {
-          const remainingItems = Inventory.getItemsForSalvage();
-          if (remainingItems.length === 0) {
-            break;
-          }
-
-          const batch = remainingItems.slice(0, CONFIG.MAX_REAGENTS);
-          if (batch.length === 0) {
-            break;
-          }
-
-          const firstBatchItem = Engine.items.getItemById(batch[0]);
-          const tabReady = await Ui.ensureCraftingModeTab();
-          if (!tabReady) {
-            break;
-          }
-
-          await Utils.sleep(200);
-
-          const batchResult = await SalvageApi.salvageItemsBatchThroughUi(batch);
-          if (batchResult > 0) {
-            successCount += batchResult;
-            noProgressRounds = 0;
-            result.itemName = firstBatchItem?.name || result.itemName;
-          } else {
-            noProgressRounds += 1;
-          }
-
-          if (noProgressRounds >= 4) {
-            break;
-          }
-
-          await Utils.sleep(320);
-        }
-
-        const remainingItems = Inventory.getItemsForSalvage().length;
-
-        if (successCount > 0) {
-          result.status = "done";
-          if (!silent) {
-            Ui.showSalvageCompletionNotification({
-              count: successCount,
-              remainingItems: remainingItems,
-              receivedItems: state.salvageReceivedItems
-            });
-          }
-        } else {
-          result.status = "failed";
-          if (!silent) {
-            message("Nie udało się wykonać rozbijania (sprawdź aktywne okno rzemiosła).", "err");
-          }
-        }
-      } finally {
-        state.salvageReceivedItems = [];
-        Ui.restoreEnhancementWindow(enhancementSession);
-        state.isEnhancing = false;
-      }
-
-      return result;
     },
 
     async enhanceSelectedItem(options = {}) {
@@ -4749,9 +4103,8 @@ const ALLOWED_ITEM_TYPES = [
           enabled: false,
         });
 
-        const autoModeLabelCapitalized =
-          state.mode === "salvage" ? "Auto rozbijanie" : "Auto ulepszanie";
-        const limitLabel = state.mode === "salvage" ? "rozbić" : "ulepszeń";
+        const autoModeLabelCapitalized = "Auto ulepszanie";
+        const limitLabel = "ulepszeń";
 
         const targetItemLabel = enhanceResult.itemName
           ? ` dla ${enhanceResult.itemName}`
@@ -4793,8 +4146,7 @@ const ALLOWED_ITEM_TYPES = [
 
         const key = String(event.key || "").toLowerCase();
         const hotkeys = state.hotkeys || CONFIG.DEFAULT_HOTKEYS;
-        const activeActionHotkey =
-          state.mode === "salvage" ? hotkeys.salvage : hotkeys.enhance;
+        const activeActionHotkey = hotkeys.enhance;
 
         if (event.shiftKey && key === hotkeys.gui) {
           event.preventDefault();
@@ -4912,43 +4264,6 @@ const ALLOWED_ITEM_TYPES = [
       state.enhancementProgressHooked = true;
     },
 
-    initSalvageMessageHook() {
-      if (state.salvageMessageHooked) return;
-      if (typeof window.message !== "function") return;
-
-      const hookFlag = "__upgraderSalvageMessageHooked";
-      if (window.message && window.message[hookFlag]) {
-        state.salvageMessageHooked = true;
-        return;
-      }
-
-      const originalMessage = window.message;
-
-      window.message = function (...args) {
-        const text = String(args[0] || "");
-        const messageType = args[1];
-
-        // Całkowicie blokuj komunikaty "Otrzymano:" z rozbijania
-        if (text.startsWith("Otrzymano:")) {
-          // Wyciągnij nazwę przedmiotu (wszystko po "Otrzymano: ")
-          const itemText = text.replace(/^Otrzymano:\s*/, "").trim();
-          
-          // Zapisz przedmiot do tablicy jeśli jesteśmy w trakcie rozbijania
-          if (itemText && state.isEnhancing) {
-            state.salvageReceivedItems.push(itemText);
-          }
-          
-          // Nie wywołuj oryginalnego komunikatu - całkowicie zablokuj wyświetlanie
-          return;
-        }
-
-        // Dla pozostałych komunikatów wywołaj oryginalną funkcję
-        return originalMessage.apply(this, args);
-      };
-
-      window.message[hookFlag] = true;
-      state.salvageMessageHooked = true;
-    },
   };
 
   const Bootstrap = {
@@ -4966,20 +4281,11 @@ const ALLOWED_ITEM_TYPES = [
       state.hotkeys = Storage.getHotkeys();
       state.autoSettings = Storage.getAutoSettings();
       state.boundSettings = Storage.getBoundSettings();
-      state.mode = Storage.getMode();
       state.enhanceCounter = Storage.getEnhanceCounter();
       state.dailyEnhancePoints = Storage.getDailyEnhancePoints();
       state.launcherVisible = Storage.getLauncherVisibility();
 
-      if (state.mode === "salvage") {
-        const selectedRarities = Storage.getAllowedRarities();
-        Storage.setAllowedRarities(
-          selectedRarities.filter((rarity) => rarity !== "heroic")
-        );
-      }
-
       Runtime.initEnhancementProgressHook();
-      Runtime.initSalvageMessageHook();
       Ui.setupCss();
       Ui.createGui();
       Automation.bindHotkey();
