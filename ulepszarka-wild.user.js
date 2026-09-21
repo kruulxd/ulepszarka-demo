@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ulepszator-demo by Kruul
 // @namespace    http://tampermonkey.net/
-// @version      0.1.13
+// @version      0.1.14
 // @description  Auto ulepszanie
 // @author       Kruul
 // @match        https://*.margonem.pl/
@@ -3467,7 +3467,7 @@ const ALLOWED_ITEM_TYPES = [
       button.id = "upgrader-launcher";
       button.className = "upgrader-launcher";
       button.innerHTML = `
-        <div class="upgrader-launcher-header">
+        <div id="upgrader-launcher-header" class="upgrader-launcher-header">
           <button id="upgrader-launcher-config-btn" class="upgrader-launcher-gear" type="button" aria-label="Ustawienia" title="Ustawienia dodatku">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z" stroke="currentColor" stroke-width="1.6"/>
