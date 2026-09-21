@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ulepszator-demo by Kruul
 // @namespace    http://tampermonkey.net/
-// @version      0.1.12
+// @version      0.1.13
 // @description  Auto ulepszanie
 // @author       Kruul
 // @match        https://*.margonem.pl/
@@ -38,11 +38,6 @@ const CONFIG = {
   DEFAULT_BUTTON_POSITION: {
     left: null,
     top: 150,
-    right: 16,
-  },
-  DEFAULT_PANEL_POSITION: {
-    left: null,
-    top: 188,
     right: 16,
   },
   DEFAULT_AUTO_SETTINGS: {
@@ -130,6 +125,8 @@ const ALLOWED_ITEM_TYPES = [
     lastProgressEventAt: 0,
     enhancementRunSummary: null,
     isEnhancing: false,
+    lastEnhanceProgress: null,
+    progressPeekTimer: null,
     lastAutoTriggerAt: 0,
     viewportSize: null,
     hasInterfaceWidget: false,
@@ -438,10 +435,6 @@ const ALLOWED_ITEM_TYPES = [
       return `upgrader-button-position-charId-${Engine.hero.d.id}`;
     },
 
-    getPanelPositionKey() {
-      return `upgrader-panel-position-charId-${Engine.hero.d.id}`;
-    },
-
     getWidgetSlotKey() {
       return `upgrader-widget-slot-charId-${Engine.hero.d.id}`;
     },
@@ -600,55 +593,6 @@ const ALLOWED_ITEM_TYPES = [
 
       window.localStorage.setItem(
         Storage.getGuiPositionKey(),
-        JSON.stringify(normalized)
-      );
-
-      return normalized;
-    },
-
-    getPanelPosition() {
-      const saved = window.localStorage.getItem(Storage.getPanelPositionKey());
-      if (!saved) {
-        return { ...CONFIG.DEFAULT_PANEL_POSITION };
-      }
-
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          left:
-            typeof parsed?.left === "number"
-              ? parsed.left
-              : CONFIG.DEFAULT_PANEL_POSITION.left,
-          top:
-            typeof parsed?.top === "number"
-              ? parsed.top
-              : CONFIG.DEFAULT_PANEL_POSITION.top,
-          right:
-            typeof parsed?.right === "number"
-              ? parsed.right
-              : CONFIG.DEFAULT_PANEL_POSITION.right,
-        };
-      } catch (error) {
-        return { ...CONFIG.DEFAULT_PANEL_POSITION };
-      }
-    },
-
-    setPanelPosition(position) {
-      const normalized = {
-        left:
-          typeof position?.left === "number" ? Math.round(position.left) : null,
-        top:
-          typeof position?.top === "number"
-            ? Math.round(position.top)
-            : CONFIG.DEFAULT_PANEL_POSITION.top,
-        right:
-          typeof position?.right === "number"
-            ? Math.round(position.right)
-            : CONFIG.DEFAULT_PANEL_POSITION.right,
-      };
-
-      window.localStorage.setItem(
-        Storage.getPanelPositionKey(),
         JSON.stringify(normalized)
       );
 
@@ -1503,8 +1447,6 @@ const ALLOWED_ITEM_TYPES = [
       }
       .upgrader-launcher,
       .upgrader-launcher *,
-      .upgrader-gui-panel,
-      .upgrader-gui-panel *,
       .upgrader-label,
       .menu-item--yellow {
         font-family: var(--ql-font) !important;
@@ -1533,7 +1475,7 @@ const ALLOWED_ITEM_TYPES = [
             position: fixed;
             right: 16px;
             top: 150px;
-            width: 208px;
+            width: 226px;
             z-index: 99999;
             border: 1px solid var(--ql-border);
             border-radius: var(--ql-radius-lg);
@@ -1544,14 +1486,19 @@ const ALLOWED_ITEM_TYPES = [
             font-family: var(--ql-font);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
             user-select: none;
-            padding: 10px;
+            padding: 12px;
             box-sizing: border-box;
+            transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .upgrader-launcher.is-expanded {
+            width: 380px;
           }
           .upgrader-launcher-header {
             display: flex;
             align-items: center;
             gap: 6px;
-            margin-bottom: 10px;
+            margin: -12px -12px 10px -12px;
+            padding: 11px 12px;
           }
           .upgrader-launcher-gear {
             flex: 0 0 auto;
@@ -1571,6 +1518,10 @@ const ALLOWED_ITEM_TYPES = [
           .upgrader-launcher-gear svg {
             width: 13px;
             height: 13px;
+            transition: transform 0.28s ease;
+          }
+          .upgrader-launcher.is-expanded .upgrader-launcher-gear svg {
+            transform: rotate(75deg);
           }
           .upgrader-launcher-gear:hover {
             background: var(--ql-white-pill);
@@ -1578,7 +1529,7 @@ const ALLOWED_ITEM_TYPES = [
           }
           .upgrader-launcher-title {
             flex: 1 1 auto;
-            font-size: 12px;
+            font-size: 16px;
             font-weight: 800;
             letter-spacing: 0.2px;
             text-align: center;
@@ -1605,7 +1556,7 @@ const ALLOWED_ITEM_TYPES = [
           }
           .upgrader-launcher-item-box {
             width: 100%;
-            height: 76px;
+            height: 46px;
             border: 1px solid var(--ql-border);
             border-radius: var(--ql-radius-md);
             background: var(--ql-bg-softer);
@@ -1614,15 +1565,6 @@ const ALLOWED_ITEM_TYPES = [
             justify-content: center;
             overflow: hidden;
             box-sizing: border-box;
-          }
-          .upgrader-launcher-item-box .upgrader-selected-preview-item,
-          .upgrader-launcher-item-box img {
-            width: 56px;
-            height: 56px;
-          }
-          .upgrader-launcher-item-box .upgrader-selected-preview-item .highlight {
-            width: 56px !important;
-            height: 56px !important;
           }
           .upgrader-launcher-item-box-empty {
             font-size: 10px;
@@ -1640,6 +1582,7 @@ const ALLOWED_ITEM_TYPES = [
             border-radius: 999px;
             border: 1px solid var(--ql-border);
             background: rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
             overflow: hidden;
             box-sizing: border-box;
           }
@@ -1647,8 +1590,40 @@ const ALLOWED_ITEM_TYPES = [
             position: absolute;
             inset: 0;
             width: 0%;
-            background: linear-gradient(90deg, rgba(74, 222, 128, 0.55), rgba(74, 222, 128, 0.9));
+            background:
+              repeating-linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.16) 0px,
+                rgba(255, 255, 255, 0.16) 7px,
+                transparent 7px,
+                transparent 14px
+              ),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 55%),
+              linear-gradient(90deg, rgba(21, 128, 61, 0.9), rgba(74, 222, 128, 0.95));
+            background-size: 20px 20px, 100% 100%, 100% 100%;
+            background-repeat: repeat, no-repeat, no-repeat;
+            animation: ql-progress-stripes 1s linear infinite;
             transition: width 0.25s ease;
+            overflow: hidden;
+          }
+          .upgrader-launcher-progress-fill::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 10px;
+            background: rgba(255, 255, 255, 0.75);
+            filter: blur(3px);
+            opacity: 0.85;
+          }
+          @keyframes ql-progress-stripes {
+            from {
+              background-position: 0 0, 0 0, 0 0;
+            }
+            to {
+              background-position: 20px 0, 0 0, 0 0;
+            }
           }
           .upgrader-launcher-progress-label {
             position: relative;
@@ -1702,68 +1677,18 @@ const ALLOWED_ITEM_TYPES = [
             color: var(--ql-black-on-white);
             border-color: var(--ql-white-pill);
           }
-          .upgrader-gui-panel {
-            position: fixed;
-            right: 16px;
-            top: 188px;
-            width: 509px;
-            z-index: 11;
-            border: 1px solid var(--ql-border);
-            border-radius: var(--ql-radius-lg);
-            background: var(--ql-bg);
-            backdrop-filter: blur(6px);
-            color: var(--ql-text);
-            padding: 26px;
-            display: none;
-            box-sizing: border-box;
-            overflow: visible;
-            user-select: none;
-            font-family: var(--ql-font);
-            cursor: default;
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+          .upgrader-settings-body {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            margin-top: 0;
+            transition: max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.22s ease, margin-top 0.28s ease;
           }
-          .upgrader-gui-title {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-            cursor: move;
-            padding: 4px 2px 10px 2px;
-            border-bottom: 1px solid var(--ql-border);
-            color: var(--ql-text);
-          }
-          .upgrader-gui-title-text {
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 0.2px;
-            text-align: center;
-            color: var(--ql-text);
-          }
-          .upgrader-gui-close-btn {
-            justify-self: end;
-            width: 24px;
-            height: 24px;
-            border: 1px solid var(--ql-border);
-            border-radius: 999px;
-            background: var(--ql-bg-soft);
-            color: var(--ql-text-dim);
-            font-size: 14px;
-            font-weight: 700;
-            line-height: 1;
-            cursor: pointer;
-            padding: 0;
-            transition: background 0.15s ease, color 0.15s ease;
-          }
-          .upgrader-gui-close-btn:hover {
-            background: var(--ql-white-pill);
-            color: var(--ql-black-on-white);
-          }
-          .upgrader-grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
+          .upgrader-launcher.is-expanded .upgrader-settings-body {
+            max-height: 900px;
+            opacity: 1;
+            margin-top: 12px;
           }
           .upgrader-grid-3 {
             display: grid;
@@ -1786,20 +1711,6 @@ const ALLOWED_ITEM_TYPES = [
             text-transform: uppercase;
             color: var(--ql-text-dim);
             margin-bottom: 7px;
-          }
-          .upgrader-card-hero {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-          }
-          .upgrader-selected-preview-box-hero {
-            min-height: 82px;
-            justify-content: center;
-          }
-          .upgrader-selected-preview-box-hero .upgrader-selected-preview-item {
-            width: 64px;
-            height: 64px;
           }
           .upgrader-gui-rarity-list-col {
             flex-direction: column;
@@ -1841,13 +1752,6 @@ const ALLOWED_ITEM_TYPES = [
               line-height: 1.4;
               color: var(--ql-text-dim);
             }
-            .upgrader-selected-preview-wrap {
-              margin-top: 10px;
-              border: 1px solid var(--ql-border);
-              border-radius: var(--ql-radius-md);
-              padding: 10px;
-              background: var(--ql-bg-softer);
-            }
             .upgrader-selected-preview-box {
               min-height: 48px;
               display: flex;
@@ -1883,24 +1787,6 @@ const ALLOWED_ITEM_TYPES = [
               object-fit: contain;
               position: relative;
               z-index: 1;
-            }
-            .upgrader-selected-preview-text {
-              font-size: 12px;
-              font-weight: 600;
-              color: var(--ql-rarity-color, var(--ql-text));
-              word-break: break-word;
-            }
-            .upgrader-selected-preview-rarity {
-              margin-top: 2px;
-              font-size: 10px;
-              font-weight: 700;
-              letter-spacing: 0.4px;
-              text-transform: uppercase;
-              color: var(--ql-rarity-color, var(--ql-text-dim));
-              opacity: 0.85;
-            }
-            .upgrader-selected-preview-rarity:empty {
-              display: none;
             }
             .upgrader-gui-rarity-wrap {
               margin-top: 10px;
@@ -2062,7 +1948,7 @@ const ALLOWED_ITEM_TYPES = [
               font-size: 11px;
               color: var(--ql-text-dim);
             }
-            .upgrader-gui-panel input[type="checkbox"] {
+            .upgrader-launcher input[type="checkbox"] {
               appearance: none;
               -webkit-appearance: none;
               width: 16px;
@@ -2075,11 +1961,11 @@ const ALLOWED_ITEM_TYPES = [
               position: relative;
               transition: background 0.15s ease, border-color 0.15s ease;
             }
-            .upgrader-gui-panel input[type="checkbox"]:checked {
+            .upgrader-launcher input[type="checkbox"]:checked {
               background: var(--ql-white-pill);
               border-color: var(--ql-white-pill);
             }
-            .upgrader-gui-panel input[type="checkbox"]:checked::after {
+            .upgrader-launcher input[type="checkbox"]:checked::after {
               content: "";
               position: absolute;
               left: 5px;
@@ -2232,8 +2118,7 @@ const ALLOWED_ITEM_TYPES = [
     },
 
     applyRarityStyling(rarity) {
-      const wrap = document.getElementById("upgrader-selected-preview-wrap");
-      const rarityText = document.getElementById("upgrader-selected-preview-rarity");
+      const wrap = document.getElementById("upgrader-launcher-item-box");
       const meta = CONFIG.RARITY_META[rarity];
 
       if (wrap) {
@@ -2244,10 +2129,6 @@ const ALLOWED_ITEM_TYPES = [
           wrap.style.removeProperty("--ql-rarity-color");
           wrap.style.removeProperty("--ql-rarity-glow");
         }
-      }
-
-      if (rarityText) {
-        rarityText.textContent = meta ? meta.label : rarity ? rarity : "";
       }
     },
 
@@ -2284,51 +2165,37 @@ const ALLOWED_ITEM_TYPES = [
     },
 
     renderSelectedItemPreview() {
-      const previewBox = document.getElementById("upgrader-selected-preview-box");
-      const previewText = document.getElementById("upgrader-selected-preview-text");
       const launcherBox = document.getElementById("upgrader-launcher-item-box");
+      if (!launcherBox) return;
 
-      if (!previewBox && !launcherBox) return;
-
-      if (previewBox) previewBox.innerHTML = "";
-      if (launcherBox) launcherBox.innerHTML = "";
+      launcherBox.innerHTML = "";
+      launcherBox.removeAttribute("title");
 
       const setEmptyState = (message) => {
-        if (previewText) previewText.textContent = message;
-        if (launcherBox) {
-          const empty = document.createElement("div");
-          empty.className = "upgrader-launcher-item-box-empty";
-          empty.textContent = message;
-          launcherBox.appendChild(empty);
-        }
+        const empty = document.createElement("div");
+        empty.className = "upgrader-launcher-item-box-empty";
+        empty.textContent = message;
+        launcherBox.appendChild(empty);
         Ui.applyRarityStyling("");
       };
 
       const selectedId = Storage.getUpgradedItemId();
       if (!selectedId) {
-        setEmptyState("Brak wybranego przedmiotu");
+        setEmptyState("Brak przedmiotu");
         return;
       }
 
       const item = Engine.items.getItemById(selectedId);
       if (!item) {
-        setEmptyState(`Wybrany ID: ${selectedId} (poza plecakiem)`);
+        setEmptyState(`ID: ${selectedId} (poza plecakiem)`);
         return;
       }
 
       const sourceNode = document.querySelector(`.item-id-${selectedId}`);
+      const iconNode = Ui.buildItemIconNode(item, sourceNode);
+      if (iconNode) launcherBox.appendChild(iconNode);
 
-      if (previewBox) {
-        const iconNode = Ui.buildItemIconNode(item, sourceNode);
-        if (iconNode) previewBox.appendChild(iconNode);
-      }
-
-      if (launcherBox) {
-        const launcherIconNode = Ui.buildItemIconNode(item, sourceNode);
-        if (launcherIconNode) launcherBox.appendChild(launcherIconNode);
-      }
-
-      if (previewText) previewText.textContent = item.name;
+      if (item.name) launcherBox.title = item.name;
       Ui.applyRarityStyling(Ui.resolveItemRarity(item, sourceNode));
     },
 
@@ -2394,10 +2261,26 @@ const ALLOWED_ITEM_TYPES = [
       const label = document.getElementById("upgrader-launcher-progress-label");
       if (!fill || !label) return;
 
+      const upgradedItemId = Storage.getUpgradedItemId();
+
       const source = document.querySelector(
         ".enhance__progress-text.enhance__progress-text--current"
       );
-      const progress = Utils.parseProgressText(source?.textContent);
+      const freshProgress = Utils.parseProgressText(source?.textContent);
+
+      if (freshProgress) {
+        state.lastEnhanceProgress = {
+          itemId: upgradedItemId,
+          current: freshProgress.current,
+          target: freshProgress.target,
+        };
+      }
+
+      const cached = state.lastEnhanceProgress;
+      const progress =
+        cached && cached.itemId === upgradedItemId
+          ? { current: cached.current, target: cached.target }
+          : null;
 
       if (!progress) {
         fill.style.width = "0%";
@@ -2635,39 +2518,6 @@ const ALLOWED_ITEM_TYPES = [
       Storage.setGuiPosition({ left: finalLeft, top: finalTop, right: null });
     },
 
-    applyPanelPosition() {
-      const panel = document.getElementById("upgrader-gui-panel");
-      if (!panel) return;
-
-      const position = Storage.getPanelPosition();
-      panel.style.top = `${position.top}px`;
-
-      if (typeof position.left === "number") {
-        panel.style.left = `${position.left}px`;
-        panel.style.right = "auto";
-      } else {
-        panel.style.left = "auto";
-        panel.style.right = `${position.right}px`;
-      }
-    },
-
-    savePanelPosition(left, top) {
-      const panel = document.getElementById("upgrader-gui-panel");
-      if (!panel) return;
-
-      const maxLeft = Math.max(window.innerWidth - panel.offsetWidth, 0);
-      const maxTop = Math.max(window.innerHeight - panel.offsetHeight, 0);
-
-      const finalLeft = Utils.clamp(left, 0, maxLeft);
-      const finalTop = Utils.clamp(top, 0, maxTop);
-
-      panel.style.left = `${finalLeft}px`;
-      panel.style.top = `${finalTop}px`;
-      panel.style.right = "auto";
-
-      Storage.setPanelPosition({ left: finalLeft, top: finalTop, right: null });
-    },
-
     keepElementInViewport(element, fallbackPosition = {}) {
       if (!element) return;
 
@@ -2797,29 +2647,6 @@ const ALLOWED_ITEM_TYPES = [
           });
         }
       }
-
-      const panel = document.getElementById("upgrader-gui-panel");
-      if (panel) {
-        if (resizeMeta) {
-          Ui.keepElementRelativeOnResize(
-            panel,
-            Storage.getPanelPosition(),
-            resizeMeta
-          );
-        } else {
-          Ui.keepElementInViewport(panel, Storage.getPanelPosition());
-        }
-
-        const panelLeft = Utils.toNumber(parseFloat(panel.style.left), NaN);
-        const panelTop = Utils.toNumber(parseFloat(panel.style.top), NaN);
-        if (Number.isFinite(panelLeft) && Number.isFinite(panelTop)) {
-          Storage.setPanelPosition({
-            left: Math.round(panelLeft),
-            top: Math.round(panelTop),
-            right: null,
-          });
-        }
-      }
     },
 
     initViewportResizeHandler() {
@@ -2862,12 +2689,18 @@ const ALLOWED_ITEM_TYPES = [
 
     initButtonDrag() {
       const button = document.getElementById("upgrader-launcher");
-      const handle = document.getElementById("upgrader-launcher-title");
+      const handle = document.getElementById("upgrader-launcher-header");
       if (!button || !handle) return;
 
       handle.addEventListener("mousedown", (event) => {
         if (event.button !== 0) return;
-        if (event.target?.closest?.("#upgrader-gui-close-btn")) return;
+        if (
+          event.target?.closest?.(
+            "#upgrader-launcher-config-btn, #upgrader-launcher-stock"
+          )
+        ) {
+          return;
+        }
 
         event.preventDefault();
 
@@ -2879,36 +2712,6 @@ const ALLOWED_ITEM_TYPES = [
           const nextLeft = moveEvent.clientX - offsetX;
           const nextTop = moveEvent.clientY - offsetY;
           Ui.saveButtonPosition(nextLeft, nextTop);
-        };
-
-        const onMouseUp = () => {
-          document.removeEventListener("mousemove", onMouseMove);
-          document.removeEventListener("mouseup", onMouseUp);
-        };
-
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
-      });
-    },
-
-    initPanelDrag() {
-      const panel = document.getElementById("upgrader-gui-panel");
-      const handle = document.getElementById("upgrader-gui-title");
-      if (!panel || !handle) return;
-
-      handle.addEventListener("mousedown", (event) => {
-        if (event.button !== 0) return;
-
-        event.preventDefault();
-
-        const panelRect = panel.getBoundingClientRect();
-        const offsetX = event.clientX - panelRect.left;
-        const offsetY = event.clientY - panelRect.top;
-
-        const onMouseMove = (moveEvent) => {
-          const nextLeft = moveEvent.clientX - offsetX;
-          const nextTop = moveEvent.clientY - offsetY;
-          Ui.savePanelPosition(nextLeft, nextTop);
         };
 
         const onMouseUp = () => {
@@ -3629,15 +3432,25 @@ const ALLOWED_ITEM_TYPES = [
     },
 
     toggleGui() {
-      const panel = document.getElementById("upgrader-gui-panel");
-      if (!panel) return;
+      const widget = document.getElementById("upgrader-launcher");
+      if (!widget) return;
+
+      const rect = widget.getBoundingClientRect();
+      widget.style.left = `${Math.round(rect.left)}px`;
+      widget.style.right = "auto";
 
       state.guiVisible = !state.guiVisible;
-      panel.style.display = state.guiVisible ? "block" : "none";
+      widget.classList.toggle("is-expanded", state.guiVisible);
+
+      const gear = document.getElementById("upgrader-launcher-config-btn");
+      if (gear) {
+        const label = state.guiVisible ? "Zwiń ustawienia" : "Rozwiń ustawienia";
+        gear.setAttribute("aria-label", label);
+        gear.title = label;
+      }
 
       if (state.guiVisible) {
         Ui.renderModeDependentTexts();
-        Ui.applyPanelPosition();
         Ui.renderSelectedItemPreview();
         Ui.renderRarityOptions();
         Ui.renderBoundSettings();
@@ -3679,25 +3492,9 @@ const ALLOWED_ITEM_TYPES = [
         <div id="upgrader-launcher-counter" class="upgrader-launcher-counter">LIMIT: --/--</div>
 
         <button id="upgrader-launcher-enhance-btn" class="upgrader-launcher-main-btn">ULEPSZ</button>
-      `;
 
-      const panel = document.createElement("div");
-      panel.id = "upgrader-gui-panel";
-      panel.className = "upgrader-gui-panel";
-      panel.innerHTML = `
-        <div id="upgrader-gui-title" class="upgrader-gui-title">
-          <span class="upgrader-gui-title-text">Quick Forge</span>
-          <button id="upgrader-gui-close-btn" class="upgrader-gui-close-btn" type="button" aria-label="Zamknij panel">×</button>
-        </div>
-        <div id="upgrader-select-hint" class="upgrader-select-hint">Wybór przedmiotu: kliknij PPM na itemie i użyj opcji „Ulepsz ten przedmiot”.</div>
-
-        <div class="upgrader-grid-2">
-          <div id="upgrader-selected-preview-wrap" class="upgrader-card upgrader-card-hero">
-            <div class="upgrader-card-title">Wybrany przedmiot</div>
-            <div id="upgrader-selected-preview-box" class="upgrader-selected-preview-box upgrader-selected-preview-box-hero"></div>
-            <div id="upgrader-selected-preview-text" class="upgrader-selected-preview-text">Brak wybranego przedmiotu</div>
-            <div id="upgrader-selected-preview-rarity" class="upgrader-selected-preview-rarity"></div>
-          </div>
+        <div id="upgrader-settings-body" class="upgrader-settings-body">
+          <div id="upgrader-select-hint" class="upgrader-select-hint">Wybór przedmiotu: kliknij PPM na itemie i użyj opcji „Ulepsz ten przedmiot”.</div>
 
           <div class="upgrader-card">
             <div class="upgrader-auto-row">
@@ -3717,57 +3514,54 @@ const ALLOWED_ITEM_TYPES = [
             />
             <div id="upgrader-auto-free-slots-info" class="upgrader-auto-info"></div>
           </div>
-        </div>
 
-        <div class="upgrader-grid-3">
-          <div class="upgrader-card">
-            <div class="upgrader-card-title">Rarity składników</div>
-            <div id="upgrader-rarity-list" class="upgrader-gui-rarity-list upgrader-gui-rarity-list-col"></div>
-          </div>
+          <div class="upgrader-grid-3">
+            <div class="upgrader-card">
+              <div class="upgrader-card-title">Rarity składników</div>
+              <div id="upgrader-rarity-list" class="upgrader-gui-rarity-list upgrader-gui-rarity-list-col"></div>
+            </div>
 
-          <div class="upgrader-card">
-            <div class="upgrader-card-title">Zwiazane przedmioty</div>
-            <label class="upgrader-bound-item" for="upgrader-allow-soulbound">
-              <span>Z właścicielem</span>
-              <input id="upgrader-allow-soulbound" type="checkbox" />
-            </label>
-            <label class="upgrader-bound-item" for="upgrader-allow-permbound">
-              <span>Na stałe</span>
-              <input id="upgrader-allow-permbound" type="checkbox" />
-            </label>
-            <div class="upgrader-bound-warning">Może spalić przedmioty.
-              <span class="upgrader-tooltip-trigger" data-tooltip="Ta reguła nie działa na heroiki oraz na przedmioty ulepszone">?</span>
+            <div class="upgrader-card">
+              <div class="upgrader-card-title">Zwiazane przedmioty</div>
+              <label class="upgrader-bound-item" for="upgrader-allow-soulbound">
+                <span>Z właścicielem</span>
+                <input id="upgrader-allow-soulbound" type="checkbox" />
+              </label>
+              <label class="upgrader-bound-item" for="upgrader-allow-permbound">
+                <span>Na stałe</span>
+                <input id="upgrader-allow-permbound" type="checkbox" />
+              </label>
+              <div class="upgrader-bound-warning">Może spalić przedmioty.
+                <span class="upgrader-tooltip-trigger" data-tooltip="Ta reguła nie działa na heroiki oraz na przedmioty ulepszone">?</span>
+              </div>
+            </div>
+
+            <div class="upgrader-card">
+              <div class="upgrader-card-title">Skróty klawiszowe</div>
+              <div class="upgrader-hotkeys-grid">
+                <div class="upgrader-hotkeys-label">Ulepszanie</div>
+                <input id="upgrader-hotkey-enhance" maxlength="1" class="upgrader-hotkeys-input" />
+                <div class="upgrader-hotkeys-label">Ustawienia (SHIFT+)</div>
+                <input id="upgrader-hotkey-gui" maxlength="1" class="upgrader-hotkeys-input" />
+              </div>
             </div>
           </div>
 
-          <div class="upgrader-card">
-            <div class="upgrader-card-title">Skróty klawiszowe</div>
-            <div class="upgrader-hotkeys-grid">
-              <div class="upgrader-hotkeys-label">Ulepszanie</div>
-              <input id="upgrader-hotkey-enhance" maxlength="1" class="upgrader-hotkeys-input" />
-              <div class="upgrader-hotkeys-label">Ustawienia (SHIFT+)</div>
-              <input id="upgrader-hotkey-gui" maxlength="1" class="upgrader-hotkeys-input" />
-            </div>
+          <div class="upgrader-gui-row">
+            <button id="upgrader-clear-btn" class="upgrader-gui-btn">Wyczyść</button>
+            <button id="upgrader-rarity-save-btn" class="upgrader-gui-btn">Reset punktów</button>
+            <button id="upgrader-hotkey-save-btn" class="upgrader-gui-btn">Zapisz skróty</button>
           </div>
-        </div>
-
-        <div class="upgrader-gui-row">
-          <button id="upgrader-clear-btn" class="upgrader-gui-btn">Wyczyść</button>
-          <button id="upgrader-rarity-save-btn" class="upgrader-gui-btn">Reset punktów</button>
-          <button id="upgrader-hotkey-save-btn" class="upgrader-gui-btn">Zapisz skróty</button>
         </div>
       `;
 
       document.body.appendChild(button);
-      document.body.appendChild(panel);
 
       Ui.applyButtonPosition();
-      Ui.applyPanelPosition();
       Ui.ensureFloatingUiVisible();
       state.viewportSize = Ui.getViewportSize();
       Ui.initViewportResizeHandler();
       Ui.initButtonDrag();
-      Ui.initPanelDrag();
       Ui.bindLauncherButtons();
       Ui.ensureInterfaceWidgetMounted();
       Ui.syncLauncherVisibility();
@@ -3800,19 +3594,6 @@ const ALLOWED_ITEM_TYPES = [
           Ui.renderHotkeyInputs();
           Ui.renderModeDependentTexts();
         });
-
-      const closeButton = document.getElementById("upgrader-gui-close-btn");
-      if (closeButton) {
-        closeButton.addEventListener("mousedown", (event) => {
-          event.stopPropagation();
-        });
-
-        closeButton.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          Ui.toggleGui();
-        });
-      }
 
       Ui.renderSelectedItemPreview();
       Ui.renderModeDependentTexts();
@@ -3850,6 +3631,7 @@ const ALLOWED_ITEM_TYPES = [
                   Storage.setUpgradedItemId("");
                   Ui.markItemAsUpgraded(currentSelectedItemId);
                   Ui.renderSelectedItemPreview();
+                  Ui.refreshEnhanceProgress();
                 },
                 { button: { cls: "menu-item--red" } },
               ]
@@ -3859,6 +3641,7 @@ const ALLOWED_ITEM_TYPES = [
                   Storage.setUpgradedItemId(itemId);
                   Ui.markItemAsUpgraded(currentSelectedItemId);
                   Ui.renderSelectedItemPreview();
+                  Automation.queueProgressPeek();
                 },
                 { button: { cls: "menu-item--yellow" } },
               ];
@@ -3872,6 +3655,46 @@ const ALLOWED_ITEM_TYPES = [
   const Automation = {
     async runPrimaryAction(options = {}) {
       return Automation.enhanceSelectedItem(options);
+    },
+
+    queueProgressPeek() {
+      if (state.progressPeekTimer) {
+        clearTimeout(state.progressPeekTimer);
+      }
+
+      state.progressPeekTimer = setTimeout(() => {
+        state.progressPeekTimer = null;
+        Automation.peekEnhanceProgress();
+      }, 300);
+    },
+
+    async peekEnhanceProgress() {
+      if (state.isEnhancing) return;
+
+      const itemId = Storage.getUpgradedItemId();
+      if (!itemId) {
+        Ui.refreshEnhanceProgress();
+        return;
+      }
+
+      const item = Engine.items.getItemById(itemId);
+      if (!item) return;
+
+      state.isEnhancing = true;
+      let session = null;
+
+      try {
+        session = Ui.prepareEnhancementWindow();
+        await EnhancementApi.setEnhancedItem(itemId);
+        Ui.refreshEnhanceProgress();
+      } catch (error) {
+        // Cichy podgląd — brak reagowania na błędy, spróbujemy przy kolejnym odświeżeniu.
+      } finally {
+        if (session) {
+          Ui.restoreEnhancementWindow(session);
+        }
+        state.isEnhancing = false;
+      }
     },
 
     async enhanceSelectedItem(options = {}) {
